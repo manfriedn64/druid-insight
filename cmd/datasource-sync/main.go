@@ -1,0 +1,187 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+
+	"druid-insight/druid"
+	"druid-insight/utils"
+)
+
+// Struct pour réponse SQL
+type druidSQLCol struct {
+	ColumnName string `json:"COLUMN_NAME"`
+	DataType   string `json:"DATA_TYPE"`
+}
+
+func backupFile(yamlPath string) error {
+	root := utils.GetProjectRoot()
+	src := filepath.Join(root, yamlPath)
+	stat, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	date := stat.ModTime().Format("20060102-1504")
+	bakdir := filepath.Join(root, "archives")
+	os.MkdirAll(bakdir, 0755)
+	dst := filepath.Join(bakdir, fmt.Sprintf("druid.yaml.%s", date))
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
+}
+
+func main() {
+	var datasource string
+	var dryRun bool
+	var yamlFile string
+
+	flag.StringVar(&datasource, "datasource", "", "Nom de la datasource à synchroniser (obligatoire)")
+	flag.BoolVar(&dryRun, "dry-run", false, "Simulation sans modification du fichier")
+	flag.StringVar(&yamlFile, "yaml", "druid.yaml", "Chemin vers druid.yaml relatif à la racine du projet")
+	flag.Parse()
+
+	if datasource == "" {
+		fmt.Println("Usage : datasource-sync --datasource <nom>")
+		os.Exit(1)
+	}
+
+	// 1. Charger la config existante
+	cfg, err := druid.LoadDruidConfig(yamlFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Erreur chargement druid.yaml : %v\n", err)
+		os.Exit(2)
+	}
+
+	// 2. Appel SQL Druid pour introspection
+	endpoint := strings.TrimRight(cfg.HostURL, "/") + "/druid/v2/sql"
+	sqlReq := map[string]interface{}{
+		"query": fmt.Sprintf("SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%s'", datasource),
+	}
+	reqBody, _ := json.Marshal(sqlReq)
+	resp, err := http.Post(endpoint, "application/json", bytes.NewReader(reqBody))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Erreur appel Druid SQL API : %v\n", err)
+		os.Exit(2)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Fprintf(os.Stderr, "Erreur Druid SQL : %s\n%s\n", resp.Status, body)
+		os.Exit(2)
+	}
+	var columns []druidSQLCol
+	if err := json.NewDecoder(resp.Body).Decode(&columns); err != nil {
+		fmt.Fprintf(os.Stderr, "Erreur parsing JSON SQL : %v\n", err)
+		os.Exit(2)
+	}
+
+	// 3. Classement dimensions / metrics
+	isText := func(t string) bool {
+		t = strings.ToUpper(t)
+		return strings.Contains(t, "VARCHAR") || strings.Contains(t, "STRING") || strings.Contains(t, "CHAR")
+	}
+	isNumber := func(t string) bool {
+		t = strings.ToUpper(t)
+		return strings.Contains(t, "BIGINT") || strings.Contains(t, "DOUBLE") ||
+			strings.Contains(t, "FLOAT") || strings.Contains(t, "DECIMAL") ||
+			strings.Contains(t, "LONG") || strings.Contains(t, "INTEGER") || strings.Contains(t, "INT")
+	}
+
+	dims := []string{}
+	mets := []string{}
+	for _, col := range columns {
+		if isText(col.DataType) {
+			dims = append(dims, col.ColumnName)
+		} else if isNumber(col.DataType) {
+			mets = append(mets, col.ColumnName)
+		}
+	}
+
+	// 4. Mettre à jour la structure
+	ds, exists := cfg.Datasources[datasource]
+	if !exists {
+		ds = druid.DruidDatasourceSchema{
+			Dimensions: map[string]druid.DruidField{},
+			Metrics:    map[string]druid.DruidField{},
+		}
+	}
+
+	var newDims, newMetrics []string
+
+	for _, dim := range dims {
+		if _, ok := ds.Dimensions[dim]; !ok {
+			ds.Dimensions[dim] = druid.DruidField{
+				Druid:    dim,
+				Reserved: false,
+			}
+			newDims = append(newDims, dim)
+		}
+	}
+	for _, met := range mets {
+		if _, ok := ds.Metrics[met]; !ok {
+			ds.Metrics[met] = druid.DruidField{
+				Druid:    met,
+				Type:     "line",
+				Reserved: false,
+			}
+			newMetrics = append(newMetrics, met)
+		}
+	}
+
+	cfg.Datasources[datasource] = ds
+
+	// Résumé clair
+	if len(newDims) == 0 && len(newMetrics) == 0 {
+		fmt.Println("Aucune modification nécessaire : tout est à jour.")
+	} else {
+		fmt.Println("Résumé des ajouts :")
+		if len(newDims) > 0 {
+			fmt.Println("  Dimensions ajoutées :", strings.Join(newDims, ", "))
+		}
+		if len(newMetrics) > 0 {
+			fmt.Println("  Metrics ajoutées    :", strings.Join(newMetrics, ", "))
+		}
+	}
+
+	// 5. Enregistrer ou simuler
+	if !dryRun && (len(newDims) > 0 || len(newMetrics) > 0) {
+		if err := backupFile(yamlFile); err != nil {
+			fmt.Fprintf(os.Stderr, "Erreur backup : %v\n", err)
+			os.Exit(2)
+		}
+		root := utils.GetProjectRoot()
+		dst := filepath.Join(root, yamlFile)
+		yamlOut, err := yaml.Marshal(cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Erreur marshal YAML : %v\n", err)
+			os.Exit(2)
+		}
+		if err := os.WriteFile(dst, yamlOut, 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "Erreur écriture YAML : %v\n", err)
+			os.Exit(2)
+		}
+		fmt.Println("Mise à jour effectuée et backup dans archives/")
+	} else if dryRun && (len(newDims) > 0 || len(newMetrics) > 0) {
+		fmt.Println("\n--- YAML qui serait écrit : ---\n")
+		out, _ := yaml.Marshal(cfg)
+		fmt.Println(string(out))
+	}
+}
