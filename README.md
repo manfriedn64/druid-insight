@@ -5,31 +5,6 @@
 
 ---
 
-## **Project structure**
-
-```
-druid-insight/
-├── cmd/
-│   ├── druid-insight/
-│   │   └── main.go         # Main HTTP server
-│   └── service/
-│       └── main.go         # Service manager: start/stop/reload (daemon)
-├── api/                    # REST API endpoints (login, schema, execute, status)
-├── auth/                   # Authentication, rights, JWT, users
-├── druid/                  # Druid mapping, formula parser, native querying
-├── worker/                 # FIFO queue, workers, request/result structs
-├── static/                 # Secure static file handler
-├── logging/                # Loggers (multi-file)
-├── config.yaml             # Main configuration
-├── druid.yaml              # Datasource/dimension/metric mapping
-├── users.yaml              # User list (if backend is "file")
-├── go.mod / go.sum         # Go module files
-├── bin/                    # Compiled binaries
-└── README.md               # This file
-```
-
----
-
 ## **Installation**
 
 **Requirements:**
@@ -54,6 +29,7 @@ make build      # Build the binaries in bin/
 - `bin/druid-insight` : the main HTTP server
 - `bin/service` : the service manager (start/stop/reload, daemon mode)
 - `bin/userctl` : CLI for user management
+- `bin/datasource-sync` : Connect to your Apache Druid to map datasource
 
 ---
 
@@ -99,21 +75,21 @@ datasources:
       date:
         druid: __time
         reserved: false
-      regie:
-        druid: network
+      browser:
+        druid: browser
         reserved: true
-      ssp:
-        druid: ssp
+      device:
+        druid: device
         reserved: false
     metrics:
-      revenue:
-        druid: revenue
+      errors:
+        druid: errors
+        reserved: true
+      requests:
+        druid: requests
         reserved: false
-      imps_sold:
-        druid: impressions
-        reserved: false
-      cpm:
-        formula: "1000 * revenue / impressions"
+      errorrate:
+        formula: "100 * errors / requests"
         reserved: true
 ```
 
@@ -189,8 +165,10 @@ The server exposes:
 
 - `/api/login`: Authentication (POST username/password → JWT)
 - `/api/schema`: Full schema: available dimensions/metrics per user/admin (JWT required)
-- `/api/report/execute`: Launch an asynchronous report (JWT, JSON payload: datasource/dimensions/metrics/filters)
-- `/api/report/status?id=...`: Poll a report’s status (waiting/processing/complete/error), retrieve the result
+- `/api/reports/execute`: Launch an asynchronous report (JWT, JSON payload: datasource/dimensions/metrics/filters)
+- `/api/reports/status?id=...`: Poll a report’s status (waiting/processing/complete/error), retrieve the result
+- `/api/reports/download?id=...`: Download a report one completed
+
 
 **Static files (UI, JS, CSS) are served securely via a whitelist, with fallback support for easy theming/modding.**
 
@@ -232,7 +210,7 @@ make test
 go test ./...
 ```
 
-**Add your own tests in each folder (`*_test.go`).**
+**Needs to add tests :)
 
 ---
 
@@ -257,7 +235,6 @@ Feel free to:
 ## **License**
 
 This project is open source, MIT licensed.  
-Apache Druid® is a trademark of Imply Data, Inc.  
 This project is not affiliated with Imply or Turnilo.
 
 ---
