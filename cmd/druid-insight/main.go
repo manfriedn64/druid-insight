@@ -49,9 +49,11 @@ func loadEverything() {
 	if err != nil {
 		log.Fatalf("Failed config.yaml: %v", err)
 	}
-	users, err = auth.LoadUsers(cfg.Auth.UserFile)
-	if err != nil {
-		log.Fatalf("Failed users.yaml: %v", err)
+	if cfg.Auth.UserBackend == "file" {
+		users, err = auth.LoadUsers(cfg.Auth.UserFile)
+		if err != nil {
+			log.Fatalf("Failed users.yaml: %v", err)
+		}
 	}
 	druidCfg, err = druid.LoadDruidConfig("druid.yaml")
 	if err != nil {
