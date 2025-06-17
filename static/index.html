@@ -12,11 +12,11 @@
   <div class="login-box">
     <h2>Connexion</h2>
     <form id="login-form">
-      <label for="user">Utilisateur</label>
+      <label for="user">User name</label>
       <input type="text" id="login-username" required autocomplete="username">
-      <label for="pass">Mot de passe</label>
+      <label for="pass">Password</label>
       <input type="password" id="login-password" required autocomplete="current-password">
-      <button type="submit">Entrer</button>
+      <button type="submit">Login</button>
     </form>
     <div id="login-error" style="color: red; display: none;"></div>
   </div>
@@ -41,36 +41,37 @@
         <select id="datasource-select"></select>
       </div>
 
-      <div class="section-title">Sélection des dimensions et métriques</div>
+      <div class="section-title">Select dimensions and metrics</div>
       <div class="dim-metric-lists">
         <div class="list-block">
           <h3>Dimensions</h3>
           <div class="list" id="dimensions-list"></div>
         </div>
         <div class="list-block">
-          <h3>Métriques</h3>
+          <h3>Metrics</h3>
           <div class="list" id="metrics-list"></div>
         </div>
       </div>
       <div class="date-block">
-        <label>Date ou période :</label>
+        <label>Period :</label>
         <input type="date" id="start-date" autocomplete="off"> à
         <input type="date" id="end-date" autocomplete="off">
       </div>
       <div class="compare-block">
-        <label>Comparer à :</label>
+        <label>Compare to :</label>
         <select id="compare-period">
           <option value="">--</option>
-          <option value="prev_day">Veille</option>
-          <option value="prev_week">Semaine précédente</option>
-          <option value="prev_month">Mois précédent</option>
+          <option value="prev_auto">Automatic</option>
+          <option value="prev_day">Yesterday</option>
+          <option value="prev_week">Last week</option>
+          <option value="prev_month">Last month</option>
         </select>
       </div>
     </div>
 
     <div class="execute-row">
-      <button class="execute-btn" id="execute-btn">Exécuter la requête</button>
-      <span id="loading" style="display:none;">⏳ Exécution...</span>
+      <button class="execute-btn" id="execute-btn">Run query</button>
+      <span id="loading" style="display:none;">⏳ running request...</span>
     </div>
     <div class="report-results-list" id="results-list"></div>
   </div>
@@ -78,14 +79,14 @@
 
 <div id="filter-popup" class="popup" style="display:none">
   <div class="popup-content">
-    <h4>Filtrer <span id="filter-dimension"></span></h4>
+    <h4>Filter <span id="filter-dimension"></span></h4>
     <div class="popup-search-box">
-      <input type="text" id="popup-search" placeholder="Rechercher une valeur...">
+      <input type="text" id="popup-search" placeholder="Search for a value...">
     </div>
     <div class="popup-values-list" id="popup-values-list"></div>
     <div class="popup-actions">
-      <button id="popup-ok">Valider</button>
-      <button id="popup-cancel" style="background:#aaa;">Annuler</button>
+      <button id="popup-ok">Ok</button>
+      <button id="popup-cancel" style="background:#aaa;">Cancel</button>
     </div>
   </div>
 </div>

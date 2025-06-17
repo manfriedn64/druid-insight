@@ -17,15 +17,15 @@ function renderResultsList() {
     let block = document.createElement('div');
     block.className = 'report-block';
     block.innerHTML = `
-      <div style="font-size:1.04em;"><b>Rapport du ${r.dt}</b></div>
+      <div style="font-size:1.04em;"><b>Report from ${r.dt}</b></div>
       <div>
-        <button class="download-csv-btn" data-id="${r.url}">Télécharger le fichier CSV</button>
-        <button class="share-btn" data-idx="${idx}">Partager</button>
+        <button class="download-csv-btn" data-id="${r.url}">Download CSV file</button>
+        <button class="share-btn" data-idx="${idx}">Share link</button>
       </div>
       <div>Taille du fichier : <b>${(r.bytes/1024).toFixed(1)} Ko</b></div>
       <div>Nombre de lignes de résultats : <b>${r.lines}</b></div>
-      <button class="modify-btn" data-idx="${idx}">Modifier</button>
-      <button class="show-api-btn" style="margin:0.5em 0 0.3em 0;">Voir la requête API</button>
+      <button class="modify-btn" data-idx="${idx}">Modify</button>
+      <button class="show-api-btn" style="margin:0.5em 0 0.3em 0;">Show API request</button>
       <div class="api-json" style="display:none">
         <div class="api-call-url" style="color:#888;font-size:0.95em;">
           <b>API:</b> <span style="font-family:monospace;">/api/reports/execute</span>
@@ -101,7 +101,7 @@ function renderResultsList() {
             'Accept': 'text/csv'
           }
         });
-        if (!res.ok) throw new Error("Erreur lors du téléchargement");
+        if (!res.ok) throw new Error("Fail to download");
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -114,7 +114,7 @@ function renderResultsList() {
           document.body.removeChild(a);
         }, 500);
       } catch (e) {
-        alert("Téléchargement impossible : " + (e.message || e));
+        alert("Can not download : " + (e.message || e));
       }
     };
   });
@@ -125,10 +125,10 @@ function renderResultsList() {
       const pre = btn.parentNode.querySelector('.api-json');
       if (pre.style.display === "none") {
         pre.style.display = "";
-        btn.textContent = "Masquer la requête API";
+        btn.textContent = "Hide API request";
       } else {
         pre.style.display = "none";
-        btn.textContent = "Voir la requête API";
+        btn.textContent = "Show API request";
       }
     };
   });

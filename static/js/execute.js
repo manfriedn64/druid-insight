@@ -30,13 +30,13 @@ function cloneDeep(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 document.getElementById('execute-btn').onclick = async function() {
-  if (!selectedDimensions.length) return alert('Sélectionne au moins une dimension');
-  if (!selectedMetrics.length) return alert('Sélectionne au moins une métrique');
+  if (!selectedDimensions.length) return alert('At least one dimension is required');
+  if (!selectedMetrics.length) return alert('At least one metric is required');
   let start = document.getElementById('start-date').value;
   let end = document.getElementById('end-date').value;
-  if (!start || !end) return alert('Choisis une période de dates');
+  if (!start || !end) return alert('Start date and end date are required');
 
-  if (window.reportInProgress) return alert("Un rapport est déjà en cours, attends la fin !");
+  if (window.reportInProgress) return alert("Please wait for previous report to be completed");
   window.reportInProgress = true;
   document.getElementById('execute-btn').disabled = true;
   document.getElementById('loading').style.display = '';
@@ -62,7 +62,7 @@ document.getElementById('execute-btn').onclick = async function() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error("Erreur lancement rapport");
+    if (!res.ok) throw new Error("Error running report");
     const { id } = await res.json();
 
     // 2. Polling de l'état du rapport
@@ -76,7 +76,7 @@ document.getElementById('execute-btn').onclick = async function() {
       status = pollResult.status;
     }
 
-    if (status !== "complete") throw new Error(pollResult.errorMsg || "Rapport en erreur");
+    if (status !== "complete") throw new Error(pollResult.errorMsg || "Report error");
 
     // 3. Télécharger le CSV (récupérer le lien)
     let url = `/api/reports/download?id=${encodeURIComponent(id)}`;
@@ -124,7 +124,7 @@ document.getElementById('execute-btn').onclick = async function() {
           report.chartData[dim].xLabels = labels;
         }
       } catch (e) {
-        console.warn("Impossible de parser le CSV pour graphique", e);
+        console.warn("Can not parse CSV file for chart", e);
       }
     }
 
