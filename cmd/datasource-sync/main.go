@@ -116,6 +116,9 @@ func main() {
 	}
 
 	// 4. Mettre à jour la structure
+	if cfg.Datasources == nil {
+		cfg.Datasources = make(map[string]druid.DruidDatasourceSchema, 0)
+	}
 	ds, exists := cfg.Datasources[datasource]
 	if !exists {
 		ds = druid.DruidDatasourceSchema{
