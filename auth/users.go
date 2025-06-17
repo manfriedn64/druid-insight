@@ -8,6 +8,7 @@ import (
 	"druid-insight/utils"
 	"encoding/hex"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,6 +82,7 @@ func GetUserFromDB(db *sql.DB, query, username string, password string) (hash, s
 	var adminVal interface{}
 	err = row.Scan(&hash, &salt, &adminVal)
 	if err != nil {
+		log.Println(err)
 		return "", "", false, err
 	}
 	isAdmin = dbToBool(adminVal)
