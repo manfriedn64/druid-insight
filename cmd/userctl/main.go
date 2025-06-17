@@ -42,9 +42,9 @@ func main() {
 func usage() {
 	fmt.Println(`Usage: userctl [add|disable|list] <username>
 
-add <username>       : Ajoute un utilisateur interactif (mot de passe demandé)
-disable <username>   : Commente/supprime un utilisateur (soft, dans users.yaml)
-list                 : Liste tous les utilisateurs`)
+add <username>       : Add a new user (password will be prompt)
+disable <username>   : Comment out a user (soft deletion in users.yaml)
+list                 : List all existing users`)
 }
 
 // Demande un mot de passe à l’admin (masqué si possible)
@@ -59,7 +59,7 @@ func promptPassword() (string, error) {
 func addUser(username string) {
 	cfg, err := auth.LoadConfig("config.yaml")
 	if err != nil {
-		fmt.Println("Erreur lecture config.yaml :", err)
+		fmt.Println("Failed loading config.yaml :", err)
 		os.Exit(1)
 	}
 	usersFile := cfg.Auth.UserFile
@@ -72,26 +72,26 @@ func addUser(username string) {
 				Admin bool   `yaml:"admin"`
 			})}
 		} else {
-			fmt.Println("Erreur lecture users.yaml :", err)
+			fmt.Println("Failed loading users.yaml :", err)
 			os.Exit(1)
 		}
 	}
 	if _, exists := users.Users[username]; exists {
-		fmt.Println("L'utilisateur existe déjà.")
+		fmt.Println("User already exists")
 		os.Exit(1)
 	}
 	pass, err := promptPassword()
 	if err != nil {
-		fmt.Println("Erreur :", err)
+		fmt.Println("Error :", err)
 		os.Exit(1)
 	}
 	salt := utils.RandomHex(8)
 	hash, err := auth.ApplyHashMacro(cfg.Auth.HashMacro, pass, username, salt, cfg.Auth.Salt)
 	if err != nil {
-		fmt.Println("Erreur hashage :", err)
+		fmt.Println("Failed hashing :", err)
 		os.Exit(1)
 	}
-	fmt.Print("Est-ce un administrateur ? (y/N) : ")
+	fmt.Print("Set as an administrator ? (y/N) : ")
 	admin := false
 	var rep string
 	fmt.Scanln(&rep)
@@ -104,13 +104,13 @@ func addUser(username string) {
 		Admin bool   `yaml:"admin"`
 	}{Hash: hash, Salt: salt, Admin: admin}
 	saveUsers(usersFile, users)
-	fmt.Println("Utilisateur ajouté.")
+	fmt.Println("User added")
 }
 
 func disableUser(username string) {
 	cfg, err := auth.LoadConfig("config.yaml")
 	if err != nil {
-		fmt.Println("Erreur lecture config.yaml :", err)
+		fmt.Println("Failed loading config.yaml :", err)
 		os.Exit(1)
 	}
 	usersFile := cfg.Auth.UserFile
@@ -118,7 +118,7 @@ func disableUser(username string) {
 	// Lire tout le users.yaml en texte
 	lines, err := utils.ReadLines(filepath.Join(utils.GetProjectRoot(), "users.yaml"))
 	if err != nil {
-		fmt.Println("Erreur lecture users.yaml :", err)
+		fmt.Println("Failed loading users.yaml :", err)
 		os.Exit(1)
 	}
 	out := []string{}
@@ -152,31 +152,31 @@ func disableUser(username string) {
 	}
 
 	if !strings.Contains(strings.Join(out, "\n"), "# "+username+":") {
-		fmt.Println("Utilisateur non trouvé ou déjà commenté.")
+		fmt.Println("User not found or already commented out")
 		return
 	}
 
 	err = os.WriteFile(usersFile, []byte(strings.Join(out, "\n")+"\n"), 0644)
 	if err != nil {
-		fmt.Println("Erreur écriture :", err)
+		fmt.Println("Failed loading :", err)
 		os.Exit(1)
 	}
-	fmt.Println("Utilisateur commenté/désactivé dans le YAML.")
+	fmt.Println("User commented out in YAML")
 }
 
 func listUsers() {
 	cfg, err := auth.LoadConfig("config.yaml")
 	if err != nil {
-		fmt.Println("Erreur lecture config.yaml :", err)
+		fmt.Println("Failed loading config.yaml :", err)
 		os.Exit(1)
 	}
 	usersFile := cfg.Auth.UserFile
 	users, err := auth.LoadUsers(usersFile)
 	if err != nil {
-		fmt.Println("Erreur lecture users.yaml :", err)
+		fmt.Println("Failed loading users.yaml :", err)
 		os.Exit(1)
 	}
-	fmt.Println("Utilisateurs enregistrés :")
+	fmt.Println("Existing users :")
 	for u, info := range users.Users {
 		role := "user"
 		if info.Admin {
@@ -189,12 +189,12 @@ func listUsers() {
 func saveUsers(usersFile string, users *auth.UsersFile) {
 	out, err := yaml.Marshal(users)
 	if err != nil {
-		fmt.Println("Erreur yaml :", err)
+		fmt.Println("Failed loading :", err)
 		os.Exit(1)
 	}
 	err = os.WriteFile(usersFile, out, 0644)
 	if err != nil {
-		fmt.Println("Erreur écriture :", err)
+		fmt.Println("Failed writing :", err)
 		os.Exit(1)
 	}
 }

@@ -15,69 +15,58 @@ import (
 	"druid-insight/druid"
 )
 
-// --- Cache mémoire avec sync.Map ---
 type filterCache struct {
 	Values    []string
 	ExpiresAt time.Time
 }
 
-var filterMemoryCache sync.Map // clé = datasource|dimension, valeur = filterCache
+var filterMemoryCache sync.Map // key = datasource|dimension, value = filterCache
 
-// FilterRequest représente les paramètres attendus dans le payload.
 type FilterRequest struct {
 	Datasource string `json:"datasource"`
 	Dimension  string `json:"dimension"`
 }
 
-// FilterResponse représente la structure de réponse envoyée au frontend.
 type FilterResponse struct {
 	Values []string `json:"values"`
 }
 
-// GetDimensionValues retourne les valeurs distinctes autorisées d'une dimension.
 func GetDimensionValues(cfg *auth.Config, druidCfg *druid.DruidConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Validation du JWT
 		_, isAdmin, err := auth.ExtractUserAndAdminFromJWT(r, cfg.JWT.Secret)
 		if err != nil {
 			http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 			return
 		}
 
-		// Lecture du payload JSON
 		var filterReq FilterRequest
 		if err := json.NewDecoder(r.Body).Decode(&filterReq); err != nil {
 			http.Error(w, "Invalid request payload", http.StatusBadRequest)
 			return
 		}
 
-		// Vérification des paramètres obligatoires
 		if filterReq.Dimension == "" || filterReq.Datasource == "" {
 			http.Error(w, "Dimension and Datasource are required", http.StatusBadRequest)
 			return
 		}
 
-		// Vérification que la datasource existe dans la configuration
 		dsConfig, ok := druidCfg.Datasources[filterReq.Datasource]
 		if !ok {
 			http.Error(w, "Datasource not found in configuration", http.StatusBadRequest)
 			return
 		}
 
-		// Vérification que la dimension existe dans la configuration
 		druidDimension, ok := dsConfig.Dimensions[filterReq.Dimension]
 		if !ok {
 			http.Error(w, "Dimension not found in configuration", http.StatusBadRequest)
 			return
 		}
 
-		// Vérification des droits utilisateur si non admin
 		if !isAdmin && druidDimension.Reserved {
 			http.Error(w, "Forbidden: access denied to dimension", http.StatusForbidden)
 			return
 		}
 
-		// --- CACHE MEMOIRE avec sync.Map ---
 		cacheKey := filterReq.Datasource + "|" + druidDimension.Druid
 		now := time.Now()
 		if val, found := filterMemoryCache.Load(cacheKey); found {
@@ -91,9 +80,7 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *druid.DruidConfig) http.Hand
 				log.Printf("filters.go - expired cache for %s \n", cacheKey)
 			}
 		}
-		// --- FIN CACHE ---
 
-		// Préparation de la requête vers Druid avec requête scan
 		druidQuery := map[string]interface{}{
 			"queryType":    "scan",
 			"dataSource":   filterReq.Datasource,
@@ -131,7 +118,7 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *druid.DruidConfig) http.Hand
 			http.Error(w, "Failed to read response from Druid", http.StatusInternalServerError)
 			return
 		}
-		// Parsing réponse Druid
+
 		var druidResp []struct {
 			Columns []string        `json:"columns"`
 			Events  [][]interface{} `json:"events"`
@@ -158,7 +145,6 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *druid.DruidConfig) http.Hand
 				if colIdx < len(evt) {
 					val, ok := evt[colIdx].(string)
 					if !ok {
-						// si la colonne est numérique ou null
 						val = fmt.Sprintf("%v", evt[colIdx])
 					}
 					valuesSet[val] = struct{}{}
@@ -171,13 +157,11 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *druid.DruidConfig) http.Hand
 		}
 		slices.Sort(values)
 
-		// --- ENREGISTRER EN CACHE pour 1h ---
 		filterMemoryCache.Store(cacheKey, filterCache{
 			Values:    values,
 			ExpiresAt: now.Add(time.Hour),
 		})
 		log.Printf("filters.go - now in cache : %s \n", cacheKey)
-		// --- FIN ---
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(FilterResponse{Values: values})

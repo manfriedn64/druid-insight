@@ -6,6 +6,7 @@ import (
 	"druid-insight/druid"
 	"druid-insight/logging"
 	"druid-insight/static"
+	"druid-insight/utils"
 	"druid-insight/worker"
 	"log"
 	"os"
@@ -21,6 +22,7 @@ var (
 )
 
 func main() {
+	utils.LogToFile("api.log")
 	loadEverything()
 
 	worker.StartReportWorkers(5, druidCfg, loggers[2])
@@ -37,7 +39,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("Serveur lancé sur %s ...", cfg.Server.Listen)
+	log.Printf("Serveur started listening onr %s ...", cfg.Server.Listen)
 	log.Fatal(api.StartServer(cfg.Server.Listen))
 }
 
@@ -45,15 +47,15 @@ func loadEverything() {
 	var err error
 	cfg, err = auth.LoadConfig("config.yaml")
 	if err != nil {
-		log.Fatalf("Erreur config.yaml: %v", err)
+		log.Fatalf("Failed config.yaml: %v", err)
 	}
 	users, err = auth.LoadUsers(cfg.Auth.UserFile)
 	if err != nil {
-		log.Fatalf("Erreur users.yaml: %v", err)
+		log.Fatalf("Failed users.yaml: %v", err)
 	}
 	druidCfg, err = druid.LoadDruidConfig("druid.yaml")
 	if err != nil {
-		log.Fatalf("Erreur druid.yaml: %v", err)
+		log.Fatalf("Failed druid.yaml: %v", err)
 	}
 	os.MkdirAll(cfg.Server.LogDir, 0755)
 	loggers = []*logging.Logger{

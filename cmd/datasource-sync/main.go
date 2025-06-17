@@ -53,9 +53,9 @@ func main() {
 	var dryRun bool
 	var yamlFile string
 
-	flag.StringVar(&datasource, "datasource", "", "Nom de la datasource à synchroniser (obligatoire)")
-	flag.BoolVar(&dryRun, "dry-run", false, "Simulation sans modification du fichier")
-	flag.StringVar(&yamlFile, "yaml", "druid.yaml", "Chemin vers druid.yaml relatif à la racine du projet")
+	flag.StringVar(&datasource, "datasource", "", "Name of datasync to sync (required)")
+	flag.BoolVar(&dryRun, "dry-run", false, "Simulate without update file")
+	flag.StringVar(&yamlFile, "yaml", "druid.yaml", "Absolute yaml file path")
 	flag.Parse()
 
 	if datasource == "" {
@@ -66,7 +66,7 @@ func main() {
 	// 1. Charger la config existante
 	cfg, err := druid.LoadDruidConfig(yamlFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Erreur chargement druid.yaml : %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed loading druid.yaml : %v\n", err)
 		os.Exit(2)
 	}
 
@@ -78,18 +78,18 @@ func main() {
 	reqBody, _ := json.Marshal(sqlReq)
 	resp, err := http.Post(endpoint, "application/json", bytes.NewReader(reqBody))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Erreur appel Druid SQL API : %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed calling Druid SQL API : %v\n", err)
 		os.Exit(2)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
-		fmt.Fprintf(os.Stderr, "Erreur Druid SQL : %s\n%s\n", resp.Status, body)
+		fmt.Fprintf(os.Stderr, "Failed Druid SQL : %s\n%s\n", resp.Status, body)
 		os.Exit(2)
 	}
 	var columns []druidSQLCol
 	if err := json.NewDecoder(resp.Body).Decode(&columns); err != nil {
-		fmt.Fprintf(os.Stderr, "Erreur parsing JSON SQL : %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed parsing JSON SQL : %v\n", err)
 		os.Exit(2)
 	}
 
@@ -148,39 +148,37 @@ func main() {
 
 	cfg.Datasources[datasource] = ds
 
-	// Résumé clair
 	if len(newDims) == 0 && len(newMetrics) == 0 {
-		fmt.Println("Aucune modification nécessaire : tout est à jour.")
+		fmt.Println("No modification needed. Everything is up-to-date.")
 	} else {
-		fmt.Println("Résumé des ajouts :")
+		fmt.Println("New entries summary :")
 		if len(newDims) > 0 {
-			fmt.Println("  Dimensions ajoutées :", strings.Join(newDims, ", "))
+			fmt.Println("  Dimensions added :", strings.Join(newDims, ", "))
 		}
 		if len(newMetrics) > 0 {
-			fmt.Println("  Metrics ajoutées    :", strings.Join(newMetrics, ", "))
+			fmt.Println("  Metrics added    :", strings.Join(newMetrics, ", "))
 		}
 	}
 
-	// 5. Enregistrer ou simuler
 	if !dryRun && (len(newDims) > 0 || len(newMetrics) > 0) {
 		if err := backupFile(yamlFile); err != nil {
-			fmt.Fprintf(os.Stderr, "Erreur backup : %v\n", err)
+			fmt.Fprintf(os.Stderr, "Backup error : %v\n", err)
 			os.Exit(2)
 		}
 		root := utils.GetProjectRoot()
 		dst := filepath.Join(root, yamlFile)
 		yamlOut, err := yaml.Marshal(cfg)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erreur marshal YAML : %v\n", err)
+			fmt.Fprintf(os.Stderr, "Marshal YAML error : %v\n", err)
 			os.Exit(2)
 		}
 		if err := os.WriteFile(dst, yamlOut, 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "Erreur écriture YAML : %v\n", err)
+			fmt.Fprintf(os.Stderr, "Writing YAML error : %v\n", err)
 			os.Exit(2)
 		}
-		fmt.Println("Mise à jour effectuée et backup dans archives/")
+		fmt.Println("Update done. Backup send to archives/")
 	} else if dryRun && (len(newDims) > 0 || len(newMetrics) > 0) {
-		fmt.Println("\n--- YAML qui serait écrit : ---\n")
+		fmt.Println("\n--- YAML would be : ---\n")
 		out, _ := yaml.Marshal(cfg)
 		fmt.Println(string(out))
 	}

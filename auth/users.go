@@ -29,12 +29,13 @@ type Config struct {
 	} `yaml:"jwt"`
 	Auth struct {
 		UserBackend string `yaml:"user_backend"` // "file", "mysql", "postgres", "sqlite"
-		UserFile    string `yaml:"user_file"`    // pour "file"
+		UserFile    string `yaml:"user_file"`
 		HashMacro   string `yaml:"hash_macro"`
 		Salt        string `yaml:"salt"`
 		DBDSN       string `yaml:"db_dsn"`
-		UserRequest string `yaml:"user_request"` // ex: SELECT hash, salt, is_admin FROM users WHERE name = ?
+		UserRequest string `yaml:"user_request"` // ex: SELECT hash, salt, is_admin FROM users WHERE name = ? AND pass = ?
 		DBHashMacro string `yaml:"db_hash_macro"`
+		DBPassHash  bool   `yaml:"db_pass_hash"`
 	} `yaml:"auth"`
 }
 
@@ -46,7 +47,6 @@ type UsersFile struct {
 	} `yaml:"users"`
 }
 
-// LoadConfig charge le fichier config.yaml
 func LoadConfig(file string) (*Config, error) {
 	var cfg Config
 	root := utils.GetProjectRoot()
@@ -61,7 +61,6 @@ func LoadConfig(file string) (*Config, error) {
 	return &cfg, nil
 }
 
-// LoadUsers charge les users depuis users.yaml
 func LoadUsers(file string) (*UsersFile, error) {
 	var uf UsersFile
 	root := utils.GetProjectRoot()
@@ -76,10 +75,9 @@ func LoadUsers(file string) (*UsersFile, error) {
 	return &uf, nil
 }
 
-// GetUserFromDB récupère les infos user depuis la DB (hash, salt, admin)
-// Ex: "SELECT hash, salt, is_admin FROM users WHERE name = ?"
-func GetUserFromDB(db *sql.DB, query, username string) (hash, salt string, isAdmin bool, err error) {
-	row := db.QueryRow(query, username)
+// Ex: "SELECT hash, salt, is_admin FROM users WHERE name = ? AND password =  ? "
+func GetUserFromDB(db *sql.DB, query, username string, password string) (hash, salt string, isAdmin bool, err error) {
+	row := db.QueryRow(query, username, password)
 	var adminVal interface{}
 	err = row.Scan(&hash, &salt, &adminVal)
 	if err != nil {

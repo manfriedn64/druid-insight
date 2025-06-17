@@ -19,7 +19,6 @@ func GenerateJWT(secret string, username string, isAdmin bool, expirationMinutes
 	return token.SignedString([]byte(secret))
 }
 
-// ExtractUserAndAdminFromJWT extrait le user et le champ admin du JWT du header Authorization.
 func ExtractUserAndAdminFromJWT(r *http.Request, secret string) (username string, isAdmin bool, err error) {
 	auth := r.Header.Get("Authorization")
 	if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
@@ -34,7 +33,6 @@ func ExtractUserAndAdminFromJWT(r *http.Request, secret string) (username string
 	}
 	if claims, ok := token.Claims.(jwt.MapClaims); ok {
 		username, _ = claims["sub"].(string)
-		// Gestion robuste du champ admin
 		switch v := claims["admin"].(type) {
 		case bool:
 			isAdmin = v

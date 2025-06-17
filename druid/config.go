@@ -25,7 +25,6 @@ type DruidField struct {
 	Type     string `yaml:"type,omitempty"` // "bar" or "line"
 }
 
-// LoadDruidConfig charge le fichier druid.yaml et retourne la structure DruidConfig
 func LoadDruidConfig(file string) (*DruidConfig, error) {
 	var cfg DruidConfig
 	root := utils.GetProjectRoot()

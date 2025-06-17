@@ -18,7 +18,6 @@ func SchemaHandler(cfg *auth.Config, druidCfg *druid.DruidConfig, accessLogger *
 		}
 		accessLogger.Write("SCHEMA user=" + user)
 
-		// Structure de retour
 		type MetricObj struct {
 			Name string `json:"name"`
 			Type string `json:"type,omitempty"`
@@ -29,7 +28,6 @@ func SchemaHandler(cfg *auth.Config, druidCfg *druid.DruidConfig, accessLogger *
 		}
 		schema := map[string]dsObj{}
 
-		// Trie des datasources
 		dsNames := make([]string, 0, len(druidCfg.Datasources))
 		for name := range druidCfg.Datasources {
 			dsNames = append(dsNames, name)
@@ -41,7 +39,6 @@ func SchemaHandler(cfg *auth.Config, druidCfg *druid.DruidConfig, accessLogger *
 			var dims []string
 			var mets []MetricObj
 
-			// Trie des dimensions
 			for k, v := range ds.Dimensions {
 				if !v.Reserved || isAdmin {
 					dims = append(dims, k)
@@ -49,7 +46,6 @@ func SchemaHandler(cfg *auth.Config, druidCfg *druid.DruidConfig, accessLogger *
 			}
 			sort.Strings(dims)
 
-			// Trie des metrics + ajout du type
 			var metNames []string
 			metType := make(map[string]string)
 			for k, v := range ds.Metrics {
@@ -70,33 +66,3 @@ func SchemaHandler(cfg *auth.Config, druidCfg *druid.DruidConfig, accessLogger *
 		json.NewEncoder(w).Encode(schema)
 	}
 }
-
-/*
-func SchemaHandler(cfg *auth.Config, druidCfg *druid.DruidConfig, accessLogger *logging.Logger) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user, isAdmin := auth.ExtractUserAndAdminFromJWT(r, cfg.JWT.Secret)
-		accessLogger.Write("SCHEMA user=" + user)
-		type dsObj struct {
-			Dimensions []string `json:"dimensions"`
-			Metrics    []string `json:"metrics"`
-		}
-		schema := map[string]dsObj{}
-		for dsName, ds := range druidCfg.Datasources {
-			var dims, mets []string
-			for k, v := range ds.Dimensions {
-				if !v.Reserved || isAdmin {
-					dims = append(dims, k)
-				}
-			}
-			for k, v := range ds.Metrics {
-				if !v.Reserved || isAdmin {
-					mets = append(mets, k)
-				}
-			}
-			schema[dsName] = dsObj{Dimensions: dims, Metrics: mets}
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(schema)
-	}
-}
-*/

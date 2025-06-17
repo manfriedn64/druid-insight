@@ -40,7 +40,6 @@ func LogToFile(filename string) *os.File {
 	if err != nil {
 		panic(err)
 	}
-	//mw := io.MultiWriter(os.Stdout, log_file)
 	mw := io.MultiWriter(log_file)
 	log.SetOutput(mw)
 	return log_file
