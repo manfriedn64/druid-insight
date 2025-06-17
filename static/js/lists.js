@@ -36,11 +36,13 @@ async function initDashboardSchema() {
     selectedDatasource = dsSelect.value;
     dsSelect.addEventListener("change", e => {
       selectedDatasource = dsSelect.value;
-      updateDimensionMetricLists();
+  selectedDimensions = [];
+  selectedMetrics = [];
+  renderLists();
       // (optionnel) reset sélection, graph, etc.
     });
     // Affiche dimensions/métriques pour la première datasource
-    updateDimensionMetricLists();
+    renderLists();
   } catch (err) {
     alert("Failed to load schema: " + err);
   }
