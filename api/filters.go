@@ -82,12 +82,11 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *druid.DruidConfig) http.Hand
 		}
 
 		druidQuery := map[string]interface{}{
-			"queryType":    "scan",
-			"dataSource":   filterReq.Datasource,
-			"columns":      []string{druidDimension.Druid},
-			"resultFormat": "compactedList",
-			"limit":        1000000,
-			"intervals":    []string{"1000-01-01T00:00:00.000Z/3000-01-01T00:00:00.000Z"},
+			"queryType":   "groupBy",
+			"dataSource":  filterReq.Datasource,
+			"dimensions":  []string{druidDimension.Druid},
+			"granularity": "all",
+			"intervals":   []string{"1000-01-01T00:00:00.000Z/3000-01-01T00:00:00.000Z"},
 		}
 
 		queryBytes, err := json.Marshal(druidQuery)
@@ -95,6 +94,7 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *druid.DruidConfig) http.Hand
 			http.Error(w, "Failed to create Druid query", http.StatusInternalServerError)
 			return
 		}
+		log.Println(string(queryBytes))
 		log.Printf("filters.go - %s not in cache, calling api \n", cacheKey)
 		req, err := http.NewRequest("POST", druidCfg.HostURL+"/druid/v2/", bytes.NewBuffer(queryBytes))
 		if err != nil {
@@ -107,50 +107,45 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *druid.DruidConfig) http.Hand
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+
 		if resp.StatusCode != http.StatusOK {
 			http.Error(w, "Failed to fetch data from Druid", http.StatusInternalServerError)
+			log.Println(string(body))
 			return
 		}
-		defer resp.Body.Close()
 
-		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			http.Error(w, "Failed to read response from Druid", http.StatusInternalServerError)
 			return
 		}
 
 		var druidResp []struct {
-			Columns []string        `json:"columns"`
-			Events  [][]interface{} `json:"events"`
+			Event map[string]interface{} `json:"event"`
 		}
+
 		if err := json.Unmarshal(body, &druidResp); err != nil {
 			http.Error(w, "Invalid response from Druid", http.StatusInternalServerError)
 			return
 		}
 
-		colIdx := -1
-		for i, col := range druidResp[0].Columns {
-			if col == druidDimension.Druid {
-				colIdx = i
-				break
-			}
-		}
-		if colIdx == -1 {
-			http.Error(w, "Column not found in Druid response", http.StatusInternalServerError)
-			return
-		}
 		valuesSet := make(map[string]struct{})
 		for _, entry := range druidResp {
-			for _, evt := range entry.Events {
-				if colIdx < len(evt) {
-					val, ok := evt[colIdx].(string)
-					if !ok {
-						val = fmt.Sprintf("%v", evt[colIdx])
-					}
-					valuesSet[val] = struct{}{}
-				}
+			valRaw, ok := entry.Event[druidDimension.Druid]
+			if !ok {
+				continue
 			}
+			if valRaw == nil {
+				continue
+			}
+			val, ok := valRaw.(string)
+			if !ok {
+				val = fmt.Sprintf("%v", valRaw)
+			}
+			valuesSet[val] = struct{}{}
 		}
+
 		var values []string
 		for val := range valuesSet {
 			values = append(values, val)
