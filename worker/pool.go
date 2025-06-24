@@ -80,6 +80,62 @@ func reportWorker(druidCfg *druid.DruidConfig, reportLogger *logging.Logger) {
 	}
 }
 
+func ComputeIntervals(start, end, compare string) (mainInterval, compareInterval string, err error) {
+	const layoutInput = "2006-01-02"
+	const layoutOutput = "2006-01-02T15:04:05Z"
+
+	startT, err := time.Parse(layoutInput, start)
+	if err != nil {
+		return "", "", err
+	}
+	endT, err := time.Parse(layoutInput, end)
+	if err != nil {
+		return "", "", err
+	}
+	// Pour couvrir toute la journée end incluse, on rajoute 1 jour à endT (convention Druid "end exclusive")
+	endT = endT.AddDate(0, 0, 1)
+
+	mainInterval = startT.Format(layoutOutput) + "/" + endT.Format(layoutOutput)
+	periodDuration := endT.Sub(startT)
+
+	var compareStart, compareEnd time.Time
+
+	switch compare {
+	case "prev_day":
+		compareEnd = startT
+		compareStart = compareEnd.Add(-periodDuration)
+	case "prev_week":
+		if periodDuration > 7*time.Hour*24 {
+			compareEnd = startT.AddDate(0, 0, -7)
+			compareStart = compareEnd.Add(-periodDuration)
+		} else {
+			compareStart = startT.AddDate(0, 0, -7)
+			compareEnd = endT.AddDate(0, 0, -7)
+		}
+	case "prev_month":
+		if periodDuration > 28*time.Hour*24 {
+			compareEnd = startT.AddDate(0, -1, 0)
+			compareStart = compareEnd.Add(-periodDuration)
+		} else {
+			compareStart = startT.AddDate(0, -1, 0)
+			compareEnd = endT.AddDate(0, -1, 0)
+		}
+	case "prev_year":
+		if periodDuration > 365*time.Hour*24 {
+			compareEnd = startT.AddDate(-1, 0, 0)
+			compareStart = compareEnd.Add(-periodDuration)
+		} else {
+			compareStart = startT.AddDate(-1, 0, 0)
+			compareEnd = endT.AddDate(-1, 0, 0)
+		}
+	default:
+		return mainInterval, "", nil
+	}
+
+	compareInterval = compareStart.Format(layoutOutput) + "/" + compareEnd.Format(layoutOutput)
+	return mainInterval, compareInterval, nil
+}
+
 // Utilise les helpers du module druid pour exécuter la requête et générer un CSV
 func ProcessRequest(req *ReportRequest, druidCfg *druid.DruidConfig, logger *logging.Logger) (ReportStatus, interface{}, string, string) {
 	// Récupération des paramètres attendus dans le payload (dimensions, metrics, filters, intervals)
@@ -113,12 +169,22 @@ func ProcessRequest(req *ReportRequest, druidCfg *druid.DruidConfig, logger *log
 	}
 	if v, ok := req.Payload["dates"]; ok {
 		if arr, ok := v.([]interface{}); ok && len(arr) == 2 {
-			// On suppose format "YYYY-MM-DD"
 			start, ok1 := arr[0].(string)
 			end, ok2 := arr[1].(string)
 			if ok1 && ok2 {
-				interval := fmt.Sprintf("%sT00:00:00.000Z/%sT23:59:59.999Z", start, end)
-				intervals = append(intervals, interval)
+				compare := ""
+				if c, ok := req.Payload["compare"].(string); ok {
+					compare = c
+				}
+				mainInterval, compareInterval, err := ComputeIntervals(start, end, compare)
+				if err != nil {
+					logger.Write(fmt.Sprintf("[FAIL] id=%s bad interval: %v", req.ID, err))
+					return StatusError, nil, "", "Intervalle invalide"
+				}
+				intervals = append(intervals, mainInterval)
+				if compareInterval != "" {
+					intervals = append(intervals, compareInterval)
+				}
 			}
 		}
 	}
@@ -131,6 +197,11 @@ func ProcessRequest(req *ReportRequest, druidCfg *druid.DruidConfig, logger *log
 	}
 	drFilters := druid.ConvertFiltersToDruidDimFilter(filters, ds)
 
+	granularity := "all"
+	if tg, ok := req.Payload["time_group"].(string); ok && tg != "" {
+		// Druid supporte hour, day, week, month (par défaut en minuscule)
+		granularity = tg
+	}
 	// 2. Construire la requête groupBy via BuildDruidQuery
 	query, err := druid.BuildDruidQuery(
 		req.Datasource,
@@ -139,6 +210,7 @@ func ProcessRequest(req *ReportRequest, druidCfg *druid.DruidConfig, logger *log
 		drFilters,
 		intervals,
 		ds,
+		granularity,
 	)
 	if err != nil {
 		logger.Write(fmt.Sprintf("[FAIL] id=%s buildquery: %v", req.ID, err))
@@ -211,30 +283,64 @@ func ProcessRequest(req *ReportRequest, druidCfg *druid.DruidConfig, logger *log
 		if evt, ok := res["event"].(map[string]interface{}); ok {
 			for _, col := range headers {
 				val := evt[col]
-				switch v := val.(type) {
-				case int, int8, int16, int32, int64:
-					rec = append(rec, fmt.Sprintf("%d", v))
-				case uint, uint8, uint16, uint32, uint64:
-					rec = append(rec, fmt.Sprintf("%d", v))
-				case float64:
-					// Pour les floats, sans notation scientifique, entier si c'est censé l'être
-					rec = append(rec, strconv.FormatFloat(v, 'f', -1, 64))
-				case float32:
-					rec = append(rec, strconv.FormatFloat(float64(v), 'f', -1, 32))
-				case string:
-					rec = append(rec, v)
-				case nil:
-					rec = append(rec, "")
-				default:
-					// fallback : affichage brut (rare)
-					// Pour les types numériques encodés dynamiquement en float64 (ex : Druid renvoie souvent int en float64)
-					rv := reflect.ValueOf(v)
-					if rv.Kind() == reflect.Float64 {
-						rec = append(rec, strconv.FormatFloat(rv.Float(), 'f', -1, 64))
-					} else if rv.Kind() == reflect.Int64 || rv.Kind() == reflect.Int {
-						rec = append(rec, fmt.Sprintf("%d", rv.Int()))
-					} else {
-						rec = append(rec, fmt.Sprintf("%v", v))
+				if col == "time" && val != nil {
+					// Conversion timestamp -> string
+					// Le timestamp Druid est en millisecondes
+					var t time.Time
+					switch val := val.(type) {
+					case float64:
+						t = time.Unix(int64(val)/1000, (int64(val)%1000)*int64(time.Millisecond))
+					case int64:
+						t = time.Unix(val/1000, (val%1000)*int64(time.Millisecond))
+					case string:
+						i, err := strconv.Atoi(val)
+						if err != nil {
+							// Peut arriver si Druid est en mode ISO string
+							parsed, err := time.Parse(time.RFC3339, val)
+							if err == nil {
+								t = parsed
+							} else {
+								// valeur non parseable, tu la laisses brute
+								rec = append(rec, fmt.Sprintf("%s", val))
+								continue
+							}
+						} else {
+							t = time.Unix(int64(i)/1000, (int64(i)%1000)*int64(time.Millisecond))
+						}
+					default:
+						// type inconnu, laisses brute
+						rec = append(rec, fmt.Sprintf("%s", val))
+						continue
+					}
+					// Format voulu :
+					s := t.Format("2006-01-02 15") // YYYY-MM-DD HH
+					rec = append(rec, s)
+				} else {
+					switch v := val.(type) {
+					case int, int8, int16, int32, int64:
+						rec = append(rec, fmt.Sprintf("%d", v))
+					case uint, uint8, uint16, uint32, uint64:
+						rec = append(rec, fmt.Sprintf("%d", v))
+					case float64:
+						// Pour les floats, sans notation scientifique, entier si c'est censé l'être
+						rec = append(rec, strconv.FormatFloat(v, 'f', -1, 64))
+					case float32:
+						rec = append(rec, strconv.FormatFloat(float64(v), 'f', -1, 32))
+					case string:
+						rec = append(rec, v)
+					case nil:
+						rec = append(rec, "")
+					default:
+						// fallback : affichage brut (rare)
+						// Pour les types numériques encodés dynamiquement en float64 (ex : Druid renvoie souvent int en float64)
+						rv := reflect.ValueOf(v)
+						if rv.Kind() == reflect.Float64 {
+							rec = append(rec, strconv.FormatFloat(rv.Float(), 'f', -1, 64))
+						} else if rv.Kind() == reflect.Int64 || rv.Kind() == reflect.Int {
+							rec = append(rec, fmt.Sprintf("%d", rv.Int()))
+						} else {
+							rec = append(rec, fmt.Sprintf("%v", v))
+						}
 					}
 				}
 			}

@@ -91,7 +91,8 @@ function renderLists() {
   if (!currentSchema || !selectedDatasource) return;
   const dlist = document.getElementById('dimensions-list');
   dlist.innerHTML = '';
-  const dims = currentSchema[selectedDatasource].dimensions;
+  let dims = currentSchema[selectedDatasource].dimensions;
+  if (!dims.includes("time")) dims = ["time", ...dims];
   dims.forEach(dim => {
     const div = document.createElement('div');
     div.className = 'item' + (selectedDimensions.includes(dim) ? ' selected' : '');
@@ -119,6 +120,32 @@ function renderLists() {
     div.appendChild(filterBtn);
     dlist.appendChild(div);
   });
+  let timeContainer = document.getElementById("time-grouping-container");
+  if (selectedDimensions.includes("time")) {
+    if (!timeContainer) {
+      timeContainer = document.createElement("div");
+      timeContainer.id = "time-grouping-container";
+      // Place juste après la liste des dimensions
+      dlist.parentNode.insertBefore(timeContainer, dlist.nextSibling);
+    }
+    timeContainer.innerHTML = `
+      <label for="time-group-select" style="margin-top:1em;font-weight:bold;">
+        Grouper la dimension temporelle par&nbsp;
+        <select id="time-group-select">
+          <option value="hour">Heure</option>
+          <option value="day">Jour</option>
+          <option value="week">Semaine</option>
+          <option value="month">Mois</option>
+        </select>
+      </label>
+    `;
+    document.getElementById("time-group-select").value = window.timeGrouping || "day";
+    document.getElementById("time-group-select").onchange = function() {
+      window.timeGrouping = this.value;
+    };
+  } else {
+    if (timeContainer) timeContainer.remove();
+  }
   const mlist = document.getElementById('metrics-list');
   mlist.innerHTML = '';
   const mets = currentSchema[selectedDatasource].metrics;

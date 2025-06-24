@@ -42,8 +42,12 @@ document.getElementById('execute-btn').onclick = async function() {
   document.getElementById('loading').style.display = '';
   let compareValue = document.getElementById('compare-period').value;
   let chartType = "auto";
+
+  // Ajout : récupère le groupement temporel si la dimension "time" est sélectionnée
+  let groupByTime = selectedDimensions.includes("time") ? (window.timeGrouping || "day") : null;
+
   let payload = {
-    datasource: selectedDatasource, 
+    datasource: selectedDatasource,
     dimensions: [...selectedDimensions],
     metrics: [...selectedMetrics],
     filters: Object.keys(filters).map(dim => ({
@@ -54,6 +58,7 @@ document.getElementById('execute-btn').onclick = async function() {
     compare: compareValue || "",
     chartType
   };
+  if (groupByTime) payload["time_group"] = groupByTime;
 
   try {
     // 1. Lancer la requête d'exécution

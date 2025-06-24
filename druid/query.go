@@ -51,9 +51,17 @@ func BuildAggsAndPostAggs(metrics []string, ds DruidDatasourceSchema) (aggs []ma
 }
 
 // BuildDruidQuery construit la requête groupBy pour Druid (JSON map) à partir des inputs
-func BuildDruidQuery(dsName string, dims []string, mets []string, filters interface{}, intervals []string, ds DruidDatasourceSchema) (map[string]interface{}, error) {
-	var druidDims []string
+func BuildDruidQuery(dsName string, dims []string, mets []string, filters interface{}, intervals []string, ds DruidDatasourceSchema, granularity string) (map[string]interface{}, error) {
+	var druidDims []interface{}
 	for _, d := range dims {
+		if d == "time" {
+			druidDims = append(druidDims, map[string]interface{}{
+				"type":       "default",
+				"dimension":  "__time",
+				"outputName": "time",
+			})
+			continue
+		}
 		dr, ok := ds.Dimensions[d]
 		if !ok {
 			return nil, fmt.Errorf("unknown dimension: %s", d)
@@ -64,11 +72,15 @@ func BuildDruidQuery(dsName string, dims []string, mets []string, filters interf
 	if err != nil {
 		return nil, err
 	}
+	g := granularity
+	if g == "" {
+		g = "all"
+	}
 	query := map[string]interface{}{
 		"queryType":    "groupBy",
 		"dataSource":   dsName,
 		"dimensions":   druidDims,
-		"granularity":  "all",
+		"granularity":  g,
 		"aggregations": aggs,
 	}
 	if len(postAggs) > 0 {

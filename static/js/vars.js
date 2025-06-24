@@ -29,4 +29,4 @@ let currentFilterDim = null;
 let tempSelectedValues = [];
 let comparisonPeriod = "";
 let allResults = [];
-
+let timeGrouping = "day";

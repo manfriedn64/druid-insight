@@ -13,6 +13,10 @@ func CheckRights(payload map[string]interface{}, druidCfg *druid.DruidConfig, da
 	if dims, ok := payload["dimensions"].([]interface{}); ok {
 		for _, dimRaw := range dims {
 			dim, _ := dimRaw.(string)
+			if dim == "time" {
+				// La dimension "time" est TOUJOURS autorisée
+				continue
+			}
 			f, ok := ds.Dimensions[dim]
 			if !ok {
 				problems = append(problems, "dimension:"+dim+":unknown")

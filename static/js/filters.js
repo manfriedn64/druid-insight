@@ -9,6 +9,27 @@ function renderPopupValues() {
   pl.innerHTML = '';
   let shown = 0;
 
+  // Cas particulier : time (affiche uniquement le select de groupement)
+  if (currentFilterDim === "time") {
+    pl.innerHTML = `
+      <div>
+        <label for="popup-time-group-select">Grouper par&nbsp;
+          <select id="popup-time-group-select">
+            <option value="hour">Heure</option>
+            <option value="day">Jour</option>
+            <option value="week">Semaine</option>
+            <option value="month">Mois</option>
+          </select>
+        </label>
+      </div>
+    `;
+    document.getElementById('popup-time-group-select').value = window.timeGrouping || "day";
+    document.getElementById('popup-time-group-select').onchange = function() {
+      window.timeGrouping = this.value;
+    };
+    return;
+  }
+
   // Filtrer la liste en amont
   let filtered = [];
   vals.forEach(val => {
@@ -41,6 +62,16 @@ async function openFilterPopup(dim) {
   document.getElementById('filter-dimension').textContent = dim;
   document.getElementById('popup-search').value = '';
   currentValues = []; // Vide tant que non chargé
+
+  // Cas particulier : time
+  if (dim === "time") {
+    document.getElementById('popup-search').style.display = 'none';
+    renderPopupValues();
+    document.getElementById('filter-popup').style.display = '';
+    return;
+  } else {
+    document.getElementById('popup-search').style.display = '';
+  }
 
   // Ouvre la popup IMMÉDIATEMENT avec indicateur de chargement
   document.getElementById('popup-values-list').innerHTML = '<i>Chargement...</i>';

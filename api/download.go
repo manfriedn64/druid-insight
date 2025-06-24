@@ -3,6 +3,7 @@ package api
 import (
 	"druid-insight/auth"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -36,7 +37,7 @@ func DownloadReportCSV(cfg *auth.Config) http.HandlerFunc {
 		}
 
 		// Log (optionnel)
-		fmt.Printf("[DOWNLOAD] user=%s id=%s path=%s\n", username, reportID, csvPath)
+		log.Printf("[DOWNLOAD] user=%s id=%s path=%s\n", username, reportID, csvPath)
 
 		// Envoi du fichier CSV
 		w.Header().Set("Content-Type", "text/csv")
