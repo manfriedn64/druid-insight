@@ -41,11 +41,14 @@ type Config struct {
 }
 
 type UsersFile struct {
-	Users map[string]struct {
-		Hash  string `yaml:"hash"`
-		Salt  string `yaml:"salt"`
-		Admin bool   `yaml:"admin"`
-	} `yaml:"users"`
+	Users map[string]UserInfo `yaml:"users"`
+}
+
+type UserInfo struct {
+	Hash   string                         `yaml:"hash"`
+	Salt   string                         `yaml:"salt"`
+	Admin  bool                           `yaml:"admin"`
+	Access map[string]map[string][]string `yaml:"access,omitempty"` // si tu as ajouté la partie droits
 }
 
 func LoadConfig(file string) (*Config, error) {

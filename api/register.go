@@ -2,12 +2,12 @@ package api
 
 import (
 	"druid-insight/auth"
-	"druid-insight/druid"
+	"druid-insight/config"
 	"druid-insight/logging"
 	"net/http"
 )
 
-func RegisterHandlers(cfg *auth.Config, users *auth.UsersFile, druidCfg *druid.DruidConfig, accessLogger, loginLogger, reportLogger *logging.Logger) {
+func RegisterHandlers(cfg *auth.Config, users *auth.UsersFile, druidCfg *config.DruidConfig, accessLogger, loginLogger, reportLogger *logging.Logger) {
 	http.HandleFunc("/api/login", LoginHandler(cfg, users, loginLogger))
 	http.HandleFunc("/api/schema", SchemaHandler(cfg, druidCfg, accessLogger))
 	http.HandleFunc("/api/reports/execute", ReportExecuteHandler(cfg, users, druidCfg, accessLogger))

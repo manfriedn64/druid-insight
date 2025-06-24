@@ -66,11 +66,9 @@ func addUser(username string) {
 	users, err := auth.LoadUsers(usersFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			users = &auth.UsersFile{Users: make(map[string]struct {
-				Hash  string `yaml:"hash"`
-				Salt  string `yaml:"salt"`
-				Admin bool   `yaml:"admin"`
-			})}
+			users = &auth.UsersFile{
+				Users: make(map[string]auth.UserInfo),
+			}
 		} else {
 			fmt.Println("Failed loading users.yaml :", err)
 			os.Exit(1)
@@ -98,11 +96,11 @@ func addUser(username string) {
 	if rep == "y" || rep == "Y" || rep == "oui" || rep == "O" {
 		admin = true
 	}
-	users.Users[username] = struct {
-		Hash  string `yaml:"hash"`
-		Salt  string `yaml:"salt"`
-		Admin bool   `yaml:"admin"`
-	}{Hash: hash, Salt: salt, Admin: admin}
+	users.Users[username] = auth.UserInfo{
+		Hash:  hash,
+		Salt:  salt,
+		Admin: admin,
+	}
 	saveUsers(usersFile, users)
 	fmt.Println("User added")
 }

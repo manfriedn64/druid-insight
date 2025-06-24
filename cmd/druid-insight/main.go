@@ -3,7 +3,7 @@ package main
 import (
 	"druid-insight/api"
 	"druid-insight/auth"
-	"druid-insight/druid"
+	"druid-insight/config"
 	"druid-insight/logging"
 	"druid-insight/static"
 	"druid-insight/utils"
@@ -17,7 +17,7 @@ import (
 var (
 	cfg      *auth.Config
 	users    *auth.UsersFile
-	druidCfg *druid.DruidConfig
+	druidCfg *config.DruidConfig
 	loggers  []*logging.Logger
 )
 
@@ -55,7 +55,7 @@ func loadEverything() {
 			log.Fatalf("Failed users.yaml: %v", err)
 		}
 	}
-	druidCfg, err = druid.LoadDruidConfig("druid.yaml")
+	druidCfg, err = config.LoadDruidConfig("druid.yaml")
 	if err != nil {
 		log.Fatalf("Failed druid.yaml: %v", err)
 	}

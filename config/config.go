@@ -1,4 +1,4 @@
-package druid
+package config
 
 import (
 	"druid-insight/utils"
@@ -19,10 +19,11 @@ type DruidDatasourceSchema struct {
 }
 
 type DruidField struct {
-	Druid    string `yaml:"druid"`
-	Formula  string `yaml:"formula,omitempty"`
-	Reserved bool   `yaml:"reserved"`
-	Type     string `yaml:"type,omitempty"` // "bar" or "line"
+	Druid       string `yaml:"druid"`
+	Formula     string `yaml:"formula,omitempty"`
+	Reserved    bool   `yaml:"reserved"`
+	Type        string `yaml:"type,omitempty"`         // "bar" or "line"
+	AccessQuery string `yaml:"access_query,omitempty"` // nouvelle ligne
 }
 
 func LoadDruidConfig(file string) (*DruidConfig, error) {

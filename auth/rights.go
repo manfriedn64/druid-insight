@@ -1,10 +1,8 @@
 package auth
 
-import (
-	"druid-insight/druid"
-)
+import "druid-insight/config"
 
-func CheckRights(payload map[string]interface{}, druidCfg *druid.DruidConfig, datasource string, isAdmin bool) []string {
+func CheckRights(payload map[string]interface{}, druidCfg *config.DruidConfig, datasource string, isAdmin bool) []string {
 	problems := []string{}
 	ds, ok := druidCfg.Datasources[datasource]
 	if !ok {

@@ -2,6 +2,8 @@ package druid
 
 import (
 	"bytes"
+	"druid-insight/auth"
+	"druid-insight/config"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,7 +13,7 @@ import (
 
 // BuildAggsAndPostAggs analyse la liste des metrics demandées,
 // et construit la liste des aggs et postAggs nécessaires.
-func BuildAggsAndPostAggs(metrics []string, ds DruidDatasourceSchema) (aggs []map[string]interface{}, postAggs []map[string]interface{}, err error) {
+func BuildAggsAndPostAggs(metrics []string, ds config.DruidDatasourceSchema) (aggs []map[string]interface{}, postAggs []map[string]interface{}, err error) {
 	aggsSet := map[string]bool{}
 	for _, m := range metrics {
 		mf := ds.Metrics[m]
@@ -51,7 +53,7 @@ func BuildAggsAndPostAggs(metrics []string, ds DruidDatasourceSchema) (aggs []ma
 }
 
 // BuildDruidQuery construit la requête groupBy pour Druid (JSON map) à partir des inputs
-func BuildDruidQuery(dsName string, dims []string, mets []string, filters interface{}, intervals []string, ds DruidDatasourceSchema, granularity string) (map[string]interface{}, error) {
+func BuildDruidQuery(dsName string, dims []string, mets []string, userFilters interface{}, intervals []string, ds config.DruidDatasourceSchema, granularity string, username string, isAdmin bool, druidCfg *config.DruidConfig, userCfg *auth.UsersFile) (map[string]interface{}, error) {
 	var druidDims []interface{}
 	for _, d := range dims {
 		if d == "time" {
@@ -76,6 +78,12 @@ func BuildDruidQuery(dsName string, dims []string, mets []string, filters interf
 	if g == "" {
 		g = "all"
 	}
+
+	// Appliquer les restrictions d'accès utilisateur
+	accessFilters := auth.GetAccessFilters(username, isAdmin, dsName, druidCfg, userCfg, nil)
+	combinedFilters := MergeWithAccessFilters(userFilters, accessFilters, ds)
+	druidDimFilter := ConvertFiltersToDruidDimFilter(combinedFilters, ds)
+
 	query := map[string]interface{}{
 		"queryType":    "groupBy",
 		"dataSource":   dsName,
@@ -86,8 +94,8 @@ func BuildDruidQuery(dsName string, dims []string, mets []string, filters interf
 	if len(postAggs) > 0 {
 		query["postAggregations"] = postAggs
 	}
-	if filters != nil {
-		query["filter"] = filters
+	if druidDimFilter != nil {
+		query["filter"] = druidDimFilter
 	}
 	if len(intervals) > 0 {
 		query["intervals"] = intervals
@@ -117,7 +125,7 @@ func ExecuteDruidQuery(hostURL string, query map[string]interface{}) ([]map[stri
 
 // filters doit être []interface{}, chaque élément étant map[string]interface{} avec "dimension" et "values"
 // ds: DruidDatasourceSchema pour récupérer le vrai nom Druid
-func ConvertFiltersToDruidDimFilter(filters []interface{}, ds DruidDatasourceSchema) interface{} {
+func ConvertFiltersToDruidDimFilter(filters []interface{}, ds config.DruidDatasourceSchema) interface{} {
 	var filterFields []interface{}
 	for _, f := range filters {
 		fmap, ok := f.(map[string]interface{})
@@ -126,14 +134,12 @@ func ConvertFiltersToDruidDimFilter(filters []interface{}, ds DruidDatasourceSch
 		}
 		dimKey, _ := fmap["dimension"].(string)
 		values, _ := fmap["values"].([]interface{})
-		// Convertit les valeurs en []string
 		var svalues []string
 		for _, v := range values {
 			if sv, ok := v.(string); ok {
 				svalues = append(svalues, sv)
 			}
 		}
-		// Récupère le vrai nom Druid
 		dimName := ds.Dimensions[dimKey].Druid
 		filterFields = append(filterFields, map[string]interface{}{
 			"type":      "in",
@@ -147,9 +153,33 @@ func ConvertFiltersToDruidDimFilter(filters []interface{}, ds DruidDatasourceSch
 	if len(filterFields) == 1 {
 		return filterFields[0]
 	}
-	// Si plusieurs, les combiner en AND
 	return map[string]interface{}{
 		"type":   "and",
 		"fields": filterFields,
 	}
+}
+
+func MergeWithAccessFilters(userFilters interface{}, access map[string][]string, ds config.DruidDatasourceSchema) []interface{} {
+	result := []interface{}{}
+
+	if userFilters != nil {
+		if arr, ok := userFilters.([]interface{}); ok {
+			result = append(result, arr...)
+		}
+	}
+
+	for dim, vals := range access {
+		if len(vals) == 0 {
+			continue
+		}
+		values := []interface{}{}
+		for _, v := range vals {
+			values = append(values, v)
+		}
+		result = append(result, map[string]interface{}{
+			"dimension": dim,
+			"values":    values,
+		})
+	}
+	return result
 }

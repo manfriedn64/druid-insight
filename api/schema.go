@@ -2,14 +2,14 @@ package api
 
 import (
 	"druid-insight/auth"
-	"druid-insight/druid"
+	"druid-insight/config"
 	"druid-insight/logging"
 	"encoding/json"
 	"net/http"
 	"sort"
 )
 
-func SchemaHandler(cfg *auth.Config, druidCfg *druid.DruidConfig, accessLogger *logging.Logger) http.HandlerFunc {
+func SchemaHandler(cfg *auth.Config, druidCfg *config.DruidConfig, accessLogger *logging.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, isAdmin, err := auth.ExtractUserAndAdminFromJWT(r, cfg.JWT.Secret)
 		if err != nil {

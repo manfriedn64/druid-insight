@@ -13,7 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"druid-insight/druid"
+	"druid-insight/config"
 	"druid-insight/utils"
 )
 
@@ -64,7 +64,7 @@ func main() {
 	}
 
 	// 1. Charger la config existante
-	cfg, err := druid.LoadDruidConfig(yamlFile)
+	cfg, err := config.LoadDruidConfig(yamlFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed loading druid.yaml : %v\n", err)
 		os.Exit(2)
@@ -117,13 +117,13 @@ func main() {
 
 	// 4. Mettre à jour la structure
 	if cfg.Datasources == nil {
-		cfg.Datasources = make(map[string]druid.DruidDatasourceSchema, 0)
+		cfg.Datasources = make(map[string]config.DruidDatasourceSchema, 0)
 	}
 	ds, exists := cfg.Datasources[datasource]
 	if !exists {
-		ds = druid.DruidDatasourceSchema{
-			Dimensions: map[string]druid.DruidField{},
-			Metrics:    map[string]druid.DruidField{},
+		ds = config.DruidDatasourceSchema{
+			Dimensions: map[string]config.DruidField{},
+			Metrics:    map[string]config.DruidField{},
 		}
 	}
 
@@ -131,7 +131,7 @@ func main() {
 
 	for _, dim := range dims {
 		if _, ok := ds.Dimensions[dim]; !ok {
-			ds.Dimensions[dim] = druid.DruidField{
+			ds.Dimensions[dim] = config.DruidField{
 				Druid:    dim,
 				Reserved: false,
 			}
@@ -140,7 +140,7 @@ func main() {
 	}
 	for _, met := range mets {
 		if _, ok := ds.Metrics[met]; !ok {
-			ds.Metrics[met] = druid.DruidField{
+			ds.Metrics[met] = config.DruidField{
 				Druid:    met,
 				Type:     "line",
 				Reserved: false,

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"druid-insight/auth"
-	"druid-insight/druid"
+	"druid-insight/config"
 )
 
 type filterCache struct {
@@ -31,9 +31,9 @@ type FilterResponse struct {
 	Values []string `json:"values"`
 }
 
-func GetDimensionValues(cfg *auth.Config, druidCfg *druid.DruidConfig) http.HandlerFunc {
+func GetDimensionValues(cfg *auth.Config, druidCfg *config.DruidConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, isAdmin, err := auth.ExtractUserAndAdminFromJWT(r, cfg.JWT.Secret)
+		username, isAdmin, err := auth.ExtractUserAndAdminFromJWT(r, cfg.JWT.Secret)
 		if err != nil {
 			http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 			return
@@ -81,12 +81,29 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *druid.DruidConfig) http.Hand
 			}
 		}
 
+		// Charger les droits locaux
+		usersFile, _ := auth.LoadUsers(cfg.Auth.UserFile)
+		accessFilters := auth.GetAccessFilters(username, isAdmin, filterReq.Datasource, druidCfg, usersFile, nil)
+
+		var druidFilter interface{} = nil
+		if vals, ok := accessFilters[filterReq.Dimension]; ok && len(vals) > 0 {
+			druidFilter = map[string]interface{}{
+				"type":      "in",
+				"dimension": druidDimension.Druid,
+				"values":    vals,
+			}
+		}
+
 		druidQuery := map[string]interface{}{
 			"queryType":   "groupBy",
 			"dataSource":  filterReq.Datasource,
 			"dimensions":  []string{druidDimension.Druid},
 			"granularity": "all",
 			"intervals":   []string{"1000-01-01T00:00:00.000Z/3000-01-01T00:00:00.000Z"},
+		}
+
+		if druidFilter != nil {
+			druidQuery["filter"] = druidFilter
 		}
 
 		queryBytes, err := json.Marshal(druidQuery)
@@ -106,6 +123,7 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *druid.DruidConfig) http.Hand
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		defer resp.Body.Close()
 		body, err := io.ReadAll(resp.Body)
@@ -133,10 +151,7 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *druid.DruidConfig) http.Hand
 		valuesSet := make(map[string]struct{})
 		for _, entry := range druidResp {
 			valRaw, ok := entry.Event[druidDimension.Druid]
-			if !ok {
-				continue
-			}
-			if valRaw == nil {
+			if !ok || valRaw == nil {
 				continue
 			}
 			val, ok := valRaw.(string)

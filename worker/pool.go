@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"druid-insight/auth"
+	"druid-insight/config"
 	"druid-insight/druid"
 	"druid-insight/logging"
 )
@@ -47,14 +49,14 @@ func PendingRequests() *sync.Map    { return &pendingRequests }
 func ProcessingRequests() *sync.Map { return &processingRequests }
 
 // Lance N workers en parallèle
-func StartReportWorkers(num int, druidCfg *druid.DruidConfig, reportLogger *logging.Logger) {
+func StartReportWorkers(num int, druidCfg *config.DruidConfig, reportLogger *logging.Logger) {
 	for i := 0; i < num; i++ {
 		go reportWorker(druidCfg, reportLogger)
 	}
 }
 
 // Un worker traite une requête à la fois, dès qu’il en trouve une dans la file FIFO
-func reportWorker(druidCfg *druid.DruidConfig, reportLogger *logging.Logger) {
+func reportWorker(druidCfg *config.DruidConfig, reportLogger *logging.Logger) {
 	for {
 		nextID := NextPendingID()
 		if nextID == "" {
@@ -137,7 +139,7 @@ func ComputeIntervals(start, end, compare string) (mainInterval, compareInterval
 }
 
 // Utilise les helpers du module druid pour exécuter la requête et générer un CSV
-func ProcessRequest(req *ReportRequest, druidCfg *druid.DruidConfig, logger *logging.Logger) (ReportStatus, interface{}, string, string) {
+func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *logging.Logger) (ReportStatus, interface{}, string, string) {
 	// Récupération des paramètres attendus dans le payload (dimensions, metrics, filters, intervals)
 	var dims, mets []string
 	var filters []interface{}
@@ -195,7 +197,6 @@ func ProcessRequest(req *ReportRequest, druidCfg *druid.DruidConfig, logger *log
 		logger.Write(fmt.Sprintf("[FAIL] id=%s unknown datasource %s", req.ID, req.Datasource))
 		return StatusError, nil, "", "Datasource inconnue"
 	}
-	drFilters := druid.ConvertFiltersToDruidDimFilter(filters, ds)
 
 	granularity := "all"
 	if tg, ok := req.Payload["time_group"].(string); ok && tg != "" {
@@ -203,14 +204,21 @@ func ProcessRequest(req *ReportRequest, druidCfg *druid.DruidConfig, logger *log
 		granularity = tg
 	}
 	// 2. Construire la requête groupBy via BuildDruidQuery
+	usersFile, _ := auth.LoadUsers("config/users.yaml")
+	userInfo := usersFile.Users[req.Owner]
+	isAdmin := userInfo.Admin
 	query, err := druid.BuildDruidQuery(
 		req.Datasource,
 		dims,
 		mets,
-		drFilters,
+		filters, // les filtres utilisateur bruts
 		intervals,
 		ds,
 		granularity,
+		req.Owner,
+		isAdmin,
+		druidCfg,
+		usersFile,
 	)
 	if err != nil {
 		logger.Write(fmt.Sprintf("[FAIL] id=%s buildquery: %v", req.ID, err))
