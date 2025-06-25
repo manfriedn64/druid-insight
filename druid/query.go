@@ -146,6 +146,7 @@ func BuildDruidQuery(dsName string, dims []string, mets []string, userFilters in
 	druidDimFilter := ConvertFiltersToDruidDimFilter(combinedFilters, ds)
 
 	query := map[string]interface{}{
+		"context":      map[string]string{"application": "druid-insight"},
 		"queryType":    "groupBy",
 		"dataSource":   dsName,
 		"dimensions":   druidDims,

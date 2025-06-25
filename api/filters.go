@@ -95,6 +95,7 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *config.DruidConfig) http.Han
 		}
 
 		druidQuery := map[string]interface{}{
+			"context":     map[string]string{"application": "druid-insight"},
 			"queryType":   "groupBy",
 			"dataSource":  filterReq.Datasource,
 			"dimensions":  []string{druidDimension.Druid},
