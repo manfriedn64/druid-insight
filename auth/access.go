@@ -61,9 +61,9 @@ func getFiltersFromDB(user string, druidCfg *config.DruidConfig, cfg *Config) ma
 
 	db, err = sql.Open(cfg.Auth.UserBackend, cfg.Auth.DBDSN)
 	if err != nil {
-		defer db.Close()
+		log.Fatal("could not load db for UserSetFilters - " + err.Error())
 	} else {
-		log.Fatal("could not load db for UserSetFilters")
+		defer db.Close()
 	}
 
 	for datasource := range druidCfg.Datasources {
