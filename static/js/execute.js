@@ -103,7 +103,11 @@ document.getElementById('execute-btn').onclick = async function() {
           const csvText = await res.text();
           // Parser CSV vanilla
           const lines = csvText.split('\n').filter(l => l.trim());
-          if (lines.length < 2) return; // pas de données utiles
+          if (lines.length < 2) {
+            alert("empty result");y
+            return
+             // pas de données utiles
+          }
           const headers = lines[0].split(',');
           const rows = lines.slice(1).map(l => l.split(','));
           // Récupère la dimension et les métriques demandées
