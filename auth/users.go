@@ -18,11 +18,12 @@ import (
 
 type Config struct {
 	Server struct {
-		Listen        string   `yaml:"listen"`
-		Static        string   `yaml:"static"`
-		StaticDefault string   `yaml:"static_default"`
-		StaticAllowed []string `yaml:"static_allowed"`
-		LogDir        string   `yaml:"log_dir"`
+		Listen        string            `yaml:"listen"`
+		Static        string            `yaml:"static"`
+		StaticDefault string            `yaml:"static_default"`
+		StaticAllowed []string          `yaml:"static_allowed"`
+		LogDir        string            `yaml:"log_dir"`
+		TemplateVars  map[string]string `yaml:"template_vars"`
 	} `yaml:"server"`
 	JWT struct {
 		Secret            string `yaml:"secret"`
