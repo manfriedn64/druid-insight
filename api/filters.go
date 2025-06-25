@@ -86,11 +86,29 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *config.DruidConfig) http.Han
 		accessFilters := auth.GetAccessFilters(username, isAdmin, filterReq.Datasource, druidCfg, usersFile, cfg)
 
 		var druidFilter interface{} = nil
-		if vals, ok := accessFilters[filterReq.Dimension]; ok && len(vals) > 0 {
-			druidFilter = map[string]interface{}{
-				"type":      "in",
-				"dimension": druidDimension.Druid,
-				"values":    vals,
+		if accessFilters != nil {
+			if len(accessFilters) == 1 {
+				for dim := range accessFilters {
+					druidFilter = map[string]interface{}{
+						"type":      "in",
+						"dimension": dim,
+						"values":    accessFilters[dim],
+					}
+				}
+			} else {
+				fields := make([]map[string]interface{}, 0)
+				for dim := range accessFilters {
+					temp := map[string]interface{}{
+						"type":      "in",
+						"dimension": dim,
+						"values":    accessFilters[dim],
+					}
+					fields = append(fields, temp)
+				}
+				druidFilter = map[string]interface{}{
+					"type":   "and",
+					"fields": fields,
+				}
 			}
 		}
 
