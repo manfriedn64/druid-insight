@@ -25,7 +25,7 @@ func main() {
 	utils.LogToFile("api.log")
 	loadEverything()
 
-	worker.StartReportWorkers(5, druidCfg, loggers[2])
+	worker.StartReportWorkers(5, druidCfg, loggers[2], cfg)
 
 	api.RegisterHandlers(cfg, users, druidCfg, loggers[0], loggers[1], loggers[2])
 	static.RegisterStaticHandler(cfg, loggers[0])

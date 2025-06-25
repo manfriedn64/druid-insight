@@ -83,7 +83,7 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *config.DruidConfig) http.Han
 
 		// Charger les droits locaux
 		usersFile, _ := auth.LoadUsers(cfg.Auth.UserFile)
-		accessFilters := auth.GetAccessFilters(username, isAdmin, filterReq.Datasource, druidCfg, usersFile, nil)
+		accessFilters := auth.GetAccessFilters(username, isAdmin, filterReq.Datasource, druidCfg, usersFile, cfg)
 
 		var druidFilter interface{} = nil
 		if vals, ok := accessFilters[filterReq.Dimension]; ok && len(vals) > 0 {

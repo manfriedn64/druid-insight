@@ -2,6 +2,7 @@ package druid
 
 import (
 	"bytes"
+	"database/sql"
 	"druid-insight/auth"
 	"druid-insight/config"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"slices"
 )
 
 // BuildAggsAndPostAggs analyse la liste des metrics demandées,
@@ -53,15 +55,64 @@ func BuildAggsAndPostAggs(metrics []string, ds config.DruidDatasourceSchema) (ag
 }
 
 // BuildDruidQuery construit la requête groupBy pour Druid (JSON map) à partir des inputs
-func BuildDruidQuery(dsName string, dims []string, mets []string, userFilters interface{}, intervals []string, ds config.DruidDatasourceSchema, granularity string, username string, isAdmin bool, druidCfg *config.DruidConfig, userCfg *auth.UsersFile) (map[string]interface{}, error) {
+func BuildDruidQuery(dsName string, dims []string, mets []string, userFilters interface{}, intervals []string, ds config.DruidDatasourceSchema, granularity string, username string, isAdmin bool, druidCfg *config.DruidConfig, cfg *auth.Config, owner string) (map[string]interface{}, error) {
+	var usersFile *auth.UsersFile
+
 	var druidDims []interface{}
 	for _, d := range dims {
 		if d == "time" {
-			druidDims = append(druidDims, map[string]interface{}{
-				"type":       "default",
-				"dimension":  "__time",
-				"outputName": "time",
-			})
+			switch granularity {
+			case "month":
+				druidDims = append(druidDims, map[string]interface{}{
+					"type":       "extraction",
+					"dimension":  "__time",
+					"outputName": "time",
+					"extractionFn": map[string]interface{}{
+						"type":     "timeFormat",
+						"format":   "yyyy-MM",
+						"timeZone": "Europe/Paris",
+					},
+				})
+			case "day":
+				druidDims = append(druidDims, map[string]interface{}{
+					"type":       "extraction",
+					"dimension":  "__time",
+					"outputName": "time",
+					"extractionFn": map[string]interface{}{
+						"type":     "timeFormat",
+						"format":   "yyyy-MM-dd",
+						"timeZone": "Europe/Paris",
+					},
+				})
+			case "hour":
+				druidDims = append(druidDims, map[string]interface{}{
+					"type":       "extraction",
+					"dimension":  "__time",
+					"outputName": "time",
+					"extractionFn": map[string]interface{}{
+						"type":     "timeFormat",
+						"format":   "yyyy-MM-dd HH",
+						"timeZone": "Europe/Paris",
+					},
+				})
+			case "week":
+				druidDims = append(druidDims, map[string]interface{}{
+					"type":       "extraction",
+					"dimension":  "__time",
+					"outputName": "time",
+					"extractionFn": map[string]interface{}{
+						"type":     "timeFormat",
+						"format":   "YYYY-'W'ww", // ISO semaine, à adapter selon besoin
+						"timeZone": "Europe/Paris",
+					},
+				})
+			default:
+				druidDims = append(druidDims, map[string]interface{}{
+					"type":       "default",
+					"dimension":  "__time",
+					"outputName": "time",
+				})
+			}
 			continue
 		}
 		dr, ok := ds.Dimensions[d]
@@ -79,8 +130,18 @@ func BuildDruidQuery(dsName string, dims []string, mets []string, userFilters in
 		g = "all"
 	}
 
+	// 2. Construire la requête groupBy via BuildDruidQuery
+	if cfg.Auth.UserBackend == "file" {
+		usersFile, _ = auth.LoadUsers("config/users.yaml")
+	} else if slices.Contains([]string{"mysql", "postgres", "sqlite"}, cfg.Auth.UserBackend) {
+		db, err := sql.Open(cfg.Auth.UserBackend, cfg.Auth.DBDSN)
+		if err == nil {
+			defer db.Close()
+		}
+	}
+
 	// Appliquer les restrictions d'accès utilisateur
-	accessFilters := auth.GetAccessFilters(username, isAdmin, dsName, druidCfg, userCfg, nil)
+	accessFilters := auth.GetAccessFilters(username, isAdmin, dsName, druidCfg, usersFile, cfg)
 	combinedFilters := MergeWithAccessFilters(userFilters, accessFilters, ds)
 	druidDimFilter := ConvertFiltersToDruidDimFilter(combinedFilters, ds)
 

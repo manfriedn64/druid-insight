@@ -49,14 +49,14 @@ func PendingRequests() *sync.Map    { return &pendingRequests }
 func ProcessingRequests() *sync.Map { return &processingRequests }
 
 // Lance N workers en parallèle
-func StartReportWorkers(num int, druidCfg *config.DruidConfig, reportLogger *logging.Logger) {
+func StartReportWorkers(num int, druidCfg *config.DruidConfig, reportLogger *logging.Logger, cfg *auth.Config) {
 	for i := 0; i < num; i++ {
-		go reportWorker(druidCfg, reportLogger)
+		go reportWorker(druidCfg, reportLogger, cfg)
 	}
 }
 
 // Un worker traite une requête à la fois, dès qu’il en trouve une dans la file FIFO
-func reportWorker(druidCfg *config.DruidConfig, reportLogger *logging.Logger) {
+func reportWorker(druidCfg *config.DruidConfig, reportLogger *logging.Logger, cfg *auth.Config) {
 	for {
 		nextID := NextPendingID()
 		if nextID == "" {
@@ -72,7 +72,7 @@ func reportWorker(druidCfg *config.DruidConfig, reportLogger *logging.Logger) {
 
 		reportLogger.Write("[START] id=" + nextID + " owner=" + req.Owner)
 
-		status, result, csvPath, errMsg := ProcessRequest(req, druidCfg, reportLogger)
+		status, result, csvPath, errMsg := ProcessRequest(req, druidCfg, reportLogger, cfg)
 		processingRequests.Store(nextID, &ReportResult{
 			Status:   status,
 			Result:   result,
@@ -139,7 +139,7 @@ func ComputeIntervals(start, end, compare string) (mainInterval, compareInterval
 }
 
 // Utilise les helpers du module druid pour exécuter la requête et générer un CSV
-func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *logging.Logger) (ReportStatus, interface{}, string, string) {
+func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *logging.Logger, cfg *auth.Config) (ReportStatus, interface{}, string, string) {
 	// Récupération des paramètres attendus dans le payload (dimensions, metrics, filters, intervals)
 	var dims, mets []string
 	var filters []interface{}
@@ -203,10 +203,7 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 		// Druid supporte hour, day, week, month (par défaut en minuscule)
 		granularity = tg
 	}
-	// 2. Construire la requête groupBy via BuildDruidQuery
-	usersFile, _ := auth.LoadUsers("config/users.yaml")
-	userInfo := usersFile.Users[req.Owner]
-	isAdmin := userInfo.Admin
+
 	query, err := druid.BuildDruidQuery(
 		req.Datasource,
 		dims,
@@ -216,9 +213,10 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 		ds,
 		granularity,
 		req.Owner,
-		isAdmin,
+		req.Admin,
 		druidCfg,
-		usersFile,
+		cfg,
+		req.Owner,
 	)
 	if err != nil {
 		logger.Write(fmt.Sprintf("[FAIL] id=%s buildquery: %v", req.ID, err))
