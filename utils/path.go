@@ -30,11 +30,9 @@ func LogToFile(filename string) *os.File {
 	_, err := os.Stat(log_file_name)
 	// if log file exist, move it to archive and rename
 	if err == nil {
-		log.Println("archiving previous log file...")
 		EnsureDirExists(filepath.Join(GetProjectRoot(), "log", "archives"))
 		os.Rename(log_file_name, filepath.Join(GetProjectRoot(), "log", "archives", filename+"."+time.Now().Format("2006-01-02-15-04-05")))
 	}
-	log.Println("log to file ", log_file_name)
 
 	log_file, err := os.OpenFile(log_file_name, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
