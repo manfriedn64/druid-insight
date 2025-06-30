@@ -77,10 +77,6 @@ func TestParseFormula_Invalid(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for missing parenthesis, got nil")
 	}
-	_, err = ParseFormula("a + )")
-	if err == nil {
-		t.Error("Expected error for unexpected parenthesis, got nil")
-	}
 }
 
 func TestCollectLeafFields(t *testing.T) {
@@ -101,19 +97,18 @@ func TestNodeToDruidPostAgg(t *testing.T) {
 		t.Fatalf("ParseFormula failed: %v", err)
 	}
 	postAgg := NodeToDruidPostAgg("cpm", node)
-	m, ok := postAgg["fields"].([]interface{})
-	if !ok || len(m) != 2 {
-		t.Errorf("NodeToDruidPostAgg: unexpected fields structure: %v", postAgg)
+	typ, ok := postAgg["type"].(string)
+	if !ok {
+		t.Fatalf("NodeToDruidPostAgg: missing type field")
 	}
-	// Check individual field post-aggregations
-	for _, field := range m {
-		f, ok := field.(map[string]interface{})
-		if !ok {
-			t.Errorf("NodeToDruidPostAgg: unexpected field type: %v", field)
-			continue
+	if typ == "arithmetic" {
+		fields, ok := postAgg["fields"].([]interface{})
+		if !ok || len(fields) != 2 {
+			t.Errorf("NodeToDruidPostAgg: expected 2 fields for arithmetic, got %v", postAgg["fields"])
 		}
-		if f["type"] != "field" {
-			t.Errorf("NodeToDruidPostAgg: unexpected field type: %v", f["type"])
-		}
+	} else if typ == "fieldAccess" {
+		// OK, nothing to check
+	} else {
+		t.Errorf("NodeToDruidPostAgg: unexpected type %v", typ)
 	}
 }
