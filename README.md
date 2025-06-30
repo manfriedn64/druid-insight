@@ -1,11 +1,33 @@
-
 # druid-insight
 
-**druid-insight** is an advanced open-source dashboard for Apache Druid®, designed as an open alternative to Turnilo. It features authentication, user/admin rights, asynchronous querying, custom metric formulas, REST API, modular static serving, logging, and more.
+**druid-insight** is an open-source web dashboard application for Apache Druid®.  
+It allows you to securely query, visualize, and export Druid data with advanced customization.
 
 ---
 
-## **Installation**
+## Features
+
+- **Modern web interface** for building and running analytical reports on Druid.
+- **JWT authentication** with user/admin role management.
+- **Fine-grained access control**: whitelists for dimensions, metrics, and static files.
+- **Asynchronous queries**: FIFO queue, workers, status polling, CSV generation and download.
+- **Custom formulas**: support for Druid post-aggregations and advanced formulas.
+- **REST API** for report execution, schema access, filter management, and more.
+- **Fast and secure CSV exports**.
+- **Advanced customization**:
+  - Themes and static files can be overridden via an admin folder.
+  - Dynamic variable injection into static files (macros `{VAR}`).
+  - Automatic fallback to a default folder if a file is not found.
+- **Enhanced security**:
+  - Static files are only served if present in a whitelist (wildcard support).
+  - All access/refusal/status events are logged.
+- **Integrated visualizations** (tables, charts via Chart.js).
+- **Report sharing** via direct links.
+- **Simple deployment** (Go binary, single configuration).
+
+---
+
+## Installation
 
 **Requirements:**
 - Go 1.21 or later
@@ -20,7 +42,7 @@ go mod tidy
 
 ---
 
-## **Build**
+## Build
 
 ```sh
 make build      # Build the binaries in bin/
@@ -33,158 +55,26 @@ make build      # Build the binaries in bin/
 
 ---
 
-## **Configuration**
+## Configuration
 
 - `config.yaml`: server parameters, JWT, user backend, logs, static files
 - `druid.yaml`: all datasources, dimensions and metrics mapping (with custom formulas)
 - `users.yaml`: users (if backend is "file"), with hash/salt/admin
 
----
-
-## Example configuration files
-
-**config.yaml**
-```yaml
-server:
-  listen: ":8080"
-  static: "./static"
-  static_default: "./static"
-  static_allowed:
-    - "index.html"
-    - "css/style.css"
-    - "js/*.js"
-  log_dir: "./logs"
-
-jwt:
-  secret: "a_super_secret_passphrase"
-  expiration_minutes: 120
-
-auth:
-  user_backend: "file"
-  user_file: "users.yaml"
-  hash_macro: "{sha256}({password}{user}{salt}{globalsalt})"
-  salt: "mysalt"
-```
-
-**druid.yaml**
-```yaml
-host_url: "http://localhost:8082/query"
-datasources:
-  myreport:
-    dimensions:
-      date:
-        druid: __time
-        reserved: false
-      browser:
-        druid: browser
-        reserved: true
-      device:
-        druid: device
-        reserved: false
-    metrics:
-      errors:
-        druid: errors
-        reserved: true
-      requests:
-        druid: requests
-        reserved: false
-      errorrate:
-        formula: "100 * errors / requests"
-        reserved: true
-```
-
-**users.yaml**
-```yaml
-users:
-  admin:
-    hash: "abcdef0123456789..."   # SHA256 hash of the password
-    salt: "somesalt"
-    admin: true
-  alice:
-    hash: "fedaedcba9876543..."
-    salt: "anothersalt"
-    admin: false
-```
----
-
-## User management (CLI)
-
-A CLI utility is provided to manage users when using the `file` backend (`users.yaml`).
-
-### Build
-
-The command is built along with the rest of the project:
-
-```sh
-make build     # or manually: go build -o bin/userctl cmd/userctl/main.go
-```
-
-### Usage
-
-```sh
-bin/userctl add <username>         # Add a user (password asked, admin role offered)
-bin/userctl disable <username>     # Soft-disable: comments the user entry in users.yaml
-bin/userctl list                   # Lists all active (non-commented) users
-```
-
-- **Example:**
-
-    ```sh
-    bin/userctl add alice
-    bin/userctl disable alice
-    bin/userctl list
-    ```
-
-- When disabling, the user entry is commented out in the YAML for easy audit or future reactivation.
-- To reactivate a user, simply uncomment their section in `users.yaml`.
+See [docs/configuration.md](docs/configuration.md) for details.
 
 ---
 
-## **Running the server**
+## Documentation
 
-### **As a service (recommended):**
-
-```sh
-make start       # Start the daemon in the background (PID in /tmp/druid-insight.pid)
-make stop        # Stop the server (SIGTERM)
-make reload      # Reload configuration at runtime (SIGHUP)
-```
-_Internally, `bin/service` manages process launching and signals._
-
-### **Direct mode (for development):**
-
-```sh
-make run         # Start the server interactively (CTRL+C to stop)
-```
+- [Configuration](docs/configuration.md)
+- [REST API](docs/api.md)
+- [Static file customization](docs/static.md)
+- [Security & access control](docs/security.md)
 
 ---
 
-## **Usage**
-
-The server exposes:
-
-- `/api/login`: Authentication (POST username/password → JWT)
-- `/api/schema`: Full schema: available dimensions/metrics per user/admin (JWT required)
-- `/api/reports/execute`: Launch an asynchronous report (JWT, JSON payload: datasource/dimensions/metrics/filters)
-- `/api/reports/status?id=...`: Poll a report’s status (waiting/processing/complete/error), retrieve the result
-- `/api/reports/download?id=...`: Download a report one completed
-
-
-**Static files (UI, JS, CSS) are served securely via a whitelist, with fallback support for easy theming/modding.**
-
----
-
-## **Logs**
-
-Three log files (default in `./logs/`):
-
-- `access.log`  — API calls, static file access
-- `login.log`   — Authentication successes/failures
-- `report.log`  — Report execution, worker logs
-
----
-
-## **Security & Rights**
+## Security & Rights
 
 - JWT Bearer authentication (JWT stored in client local storage)
 - Any `reserved: true` dimension or metric in `druid.yaml` is admin-only
@@ -193,14 +83,14 @@ Three log files (default in `./logs/`):
 
 ---
 
-## **Custom metric formulas**
+## Custom metric formulas
 
-- Supports complex arithmetic formulas for metrics (`cpm: 1000 * revenue / impressions`, etc.), translated **directly into Druid postAggregations** (as in Turnilo/Superset).
+- Supports complex arithmetic formulas for metrics (`cpm: 1000 * revenue / impressions`, etc.), translated **directly into Druid postAggregations**.
 - Parsing is secured: it is impossible to use undeclared or reserved metrics/dimensions without the proper rights.
 
 ---
 
-## **Testing**
+## Testing
 
 Run all unit tests:
 
@@ -210,11 +100,9 @@ make test
 go test ./...
 ```
 
-**Needs to add tests :)
-
 ---
 
-## **Extending**
+## Extending
 
 - To add metrics/dimensions, simply update `druid.yaml` (supports formulas and mapping).
 - To change rights, edit the `reserved` flag or set users as `admin: true/false`.
@@ -222,20 +110,16 @@ go test ./...
 
 ---
 
-## **Contributing**
+## Contributing
 
-Feel free to:
-
-- Open a PR for a bug, an endpoint or a new chart type
-- Add tests, CI, documentation
-- Discuss project evolution in the GitHub repo
+Contributions are welcome!  
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a pull request.
 
 ---
 
-## **License**
+## License
 
-This project is open source, MIT licensed.  
-This project is not affiliated with Imply or Turnilo.
+MIT
 
 ---
 
