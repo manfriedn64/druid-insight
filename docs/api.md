@@ -8,7 +8,7 @@
 **Request payload:**
 ```json
 {
-  "user": "alice",
+  "username": "alice",
   "password": "your_password"
 }
 ```
@@ -30,11 +30,13 @@
 **Response:**
 ```json
 {
-  "datasources": {
-    "myreport": {
-      "dimensions": ["date", "browser", "device"],
-      "metrics": ["errors", "requests", "errorrate"]
-    }
+  "myreport": {
+    "dimensions": ["date", "browser", "device"],
+    "metrics": [
+      {"name": "errors", "type": "long"},
+      {"name": "requests", "type": "long"},
+      {"name": "errorrate", "type": "float"}
+    ]
   }
 }
 ```
@@ -74,13 +76,7 @@
 **Response (example):**
 ```json
 {
-  "id": "report_1234567890",
-  "status": "complete",
-  "progress": 100,
-  "result": [
-    {"date": "2024-01-01", "browser": "Chrome", "requests": 123, "errors": 2},
-    {"date": "2024-01-01", "browser": "Firefox", "requests": 98, "errors": 1}
-  ]
+  "status": "complete"
 }
 ```
 
