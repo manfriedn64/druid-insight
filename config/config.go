@@ -24,6 +24,7 @@ type DruidField struct {
 	Reserved    bool   `yaml:"reserved"`
 	Type        string `yaml:"type,omitempty"`         // "bar" or "line"
 	AccessQuery string `yaml:"access_query,omitempty"` // nouvelle ligne
+	Lookup      string `yaml:"lookup,omitempty"`       // nom du lookup druid (optionnel)
 }
 
 func LoadDruidConfig(file string) (*DruidConfig, error) {

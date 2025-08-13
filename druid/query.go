@@ -119,7 +119,16 @@ func BuildDruidQuery(dsName string, dims []string, mets []string, userFilters in
 		if !ok {
 			return nil, fmt.Errorf("unknown dimension: %s", d)
 		}
-		druidDims = append(druidDims, dr.Druid)
+		if dr.Lookup != "" {
+			druidDims = append(druidDims, map[string]interface{}{
+				"type":       "lookup",
+				"dimension":  dr.Druid,
+				"outputName": d,
+				"name":       dr.Lookup,
+			})
+		} else {
+			druidDims = append(druidDims, dr.Druid)
+		}
 	}
 	aggs, postAggs, err := BuildAggsAndPostAggs(mets, ds)
 	if err != nil {
@@ -202,12 +211,24 @@ func ConvertFiltersToDruidDimFilter(filters []interface{}, ds config.DruidDataso
 				svalues = append(svalues, sv)
 			}
 		}
-		dimName := ds.Dimensions[dimKey].Druid
-		filterFields = append(filterFields, map[string]interface{}{
-			"type":      "in",
-			"dimension": dimName,
-			"values":    svalues,
-		})
+		field := ds.Dimensions[dimKey]
+		if field.Lookup != "" {
+			filterFields = append(filterFields, map[string]interface{}{
+				"type":      "in",
+				"dimension": field.Druid,
+				"values":    svalues,
+				"extractionFn": map[string]interface{}{
+					"type":   "lookup",
+					"lookup": field.Lookup,
+				},
+			})
+		} else {
+			filterFields = append(filterFields, map[string]interface{}{
+				"type":      "in",
+				"dimension": field.Druid,
+				"values":    svalues,
+			})
+		}
 	}
 	if len(filterFields) == 0 {
 		return nil
