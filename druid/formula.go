@@ -92,6 +92,18 @@ func parseFactor(tokens []string) (*FormulaNode, []string, error) {
 		return node, tokens2[1:], nil
 	}
 	tok := tokens[0]
+	// Ajout : gestion des fonctions sum(x)
+	if len(tokens) > 2 && tokens[1] == "(" {
+		fnName := tok
+		argNode, rest, err := parseFormulaExpr(tokens[2:])
+		if err != nil {
+			return nil, tokens, err
+		}
+		if len(rest) == 0 || rest[0] != ")" {
+			return nil, tokens, errors.New("missing ) after function argument")
+		}
+		return &FormulaNode{Op: "func", Value: fnName, Left: argNode}, rest[1:], nil
+	}
 	if _, err := strconv.ParseFloat(tok, 64); err == nil {
 		return &FormulaNode{Value: tok}, tokens[1:], nil
 	}
@@ -142,6 +154,13 @@ func NodeToDruidPostAgg(name string, node *FormulaNode) map[string]interface{} {
 		return map[string]interface{}{
 			"type":      "fieldAccess",
 			"fieldName": node.Value,
+		}
+	}
+	if node.Op == "func" && node.Value == "sum" {
+		// On suppose que l'agg Druid s'appelle "sum_<champ>"
+		return map[string]interface{}{
+			"type":      "fieldAccess",
+			"fieldName": "sum_" + node.Left.Value,
 		}
 	}
 	fnMap := map[string]string{

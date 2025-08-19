@@ -30,13 +30,14 @@ func BuildAggsAndPostAggs(metrics []string, ds config.DruidDatasourceSchema) (ag
 				if !ok || base.Druid == "" {
 					return nil, nil, fmt.Errorf("metric %s used in formula %s not found", f, m)
 				}
-				if !aggsSet[f] {
+				aggName := "sum_" + f // convention pour sum(x)
+				if !aggsSet[aggName] {
 					aggs = append(aggs, map[string]interface{}{
 						"type":      "doubleSum", // TODO: rendre dynamique selon métrique
-						"name":      f,
+						"name":      aggName,
 						"fieldName": base.Druid,
 					})
-					aggsSet[f] = true
+					aggsSet[aggName] = true
 				}
 			}
 			postAggs = append(postAggs, NodeToDruidPostAgg(m, node))
