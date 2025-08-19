@@ -112,3 +112,28 @@ func TestNodeToDruidPostAgg(t *testing.T) {
 		t.Errorf("NodeToDruidPostAgg: unexpected type %v", typ)
 	}
 }
+
+func TestParseFormula_SumFunction(t *testing.T) {
+	node, err := ParseFormula("sum(revenue) / sum(imps)")
+	if err != nil {
+		t.Fatalf("ParseFormula failed: %v", err)
+	}
+	if node.Op != "/" {
+		t.Errorf("Expected root op '/', got %q", node.Op)
+	}
+	if node.Left.Op != "func" || node.Left.Value != "sum" {
+		t.Errorf("Expected left func 'sum', got %+v", node.Left)
+	}
+	if node.Right.Op != "func" || node.Right.Value != "sum" {
+		t.Errorf("Expected right func 'sum', got %+v", node.Right)
+	}
+	postAgg := NodeToDruidPostAgg("cpm", node)
+	left := postAgg["fields"].([]interface{})[0].(map[string]interface{})
+	right := postAgg["fields"].([]interface{})[1].(map[string]interface{})
+	if left["fieldName"] != "sum_revenue" {
+		t.Errorf("Expected left fieldName 'sum_revenue', got %v", left["fieldName"])
+	}
+	if right["fieldName"] != "sum_imps" {
+		t.Errorf("Expected right fieldName 'sum_imps', got %v", right["fieldName"])
+	}
+}
