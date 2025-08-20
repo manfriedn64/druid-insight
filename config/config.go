@@ -14,6 +14,7 @@ type DruidConfig struct {
 }
 
 type DruidDatasourceSchema struct {
+	DruidName  string                `yaml:"druid_name"` // nom réel dans Druid
 	Dimensions map[string]DruidField `yaml:"dimensions"`
 	Metrics    map[string]DruidField `yaml:"metrics"`
 }
