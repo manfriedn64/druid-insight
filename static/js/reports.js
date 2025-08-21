@@ -20,6 +20,7 @@ function renderResultsList() {
       <div style="font-size:1.04em;"><b>Report from ${r.dt}</b></div>
       <div>
         <button class="download-csv-btn" data-id="${r.url}">Download CSV file</button>
+        <button class="download-xlsx-btn" data-id="${r.url}">Download Excel file</button>
         <button class="share-btn" data-idx="${idx}">Share link</button>
       </div>
       <div>Taille du fichier : <b>${(r.bytes/1024).toFixed(1)} Ko</b></div>
@@ -107,6 +108,32 @@ function renderResultsList() {
         const a = document.createElement('a');
         a.href = url;
         a.download = `report_${reportId}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }, 500);
+      } catch (e) {
+        alert("Can not download : " + (e.message || e));
+      }
+    };
+  });
+  document.querySelectorAll('.download-xlsx-btn').forEach(btn => {
+    btn.onclick = async function() {
+      let reportId = this.getAttribute('data-id');
+      try {
+        const res = await apiFetch(reportId + "&type=excel", {
+          headers: {
+            'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          }
+        });
+        if (!res.ok) throw new Error("Fail to download");
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `report_${reportId}.xlsx`;
         document.body.appendChild(a);
         a.click();
         setTimeout(() => {
