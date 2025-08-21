@@ -406,23 +406,51 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 		}
 		// Détection du type de chaque colonne
 		for i, vals := range colValues {
-			isFloat, isInt := false, true
+			isInt, isFloat := true, true
 			for _, v := range vals {
-				switch v := v.(type) {
+				switch vv := v.(type) {
+				case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+					// ok
 				case float64, float32:
-					isFloat = true
-					if float64Val, ok := v.(float64); ok && float64Val != float64(int64(float64Val)) {
+					f, _ := anyToFloat64(vv)
+					if f != float64(int64(f)) {
 						isInt = false
 					}
-				case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-					// reste int
 				case string:
+					// Tente de parser comme int
+					if n, err := strconv.ParseInt(vv, 10, 64); err == nil {
+						if float64(n) != float64(int64(float64(n))) {
+							isInt = false
+						}
+						continue
+					}
+					// Tente de parser comme float
+					if f, err := strconv.ParseFloat(vv, 64); err == nil {
+						if f != float64(int64(f)) {
+							isInt = false
+						}
+						continue
+					}
+					// Sinon, ce n'est pas un nombre
 					isInt = false
 					isFloat = false
+					break
+				default:
+					isInt = false
+					isFloat = false
+					break
 				}
 			}
-			colIsFloat[i] = isFloat && !isInt
-			colIsInt[i] = isInt && !isFloat
+			if isInt {
+				colIsInt[i] = true
+				colIsFloat[i] = false
+			} else if isFloat {
+				colIsInt[i] = false
+				colIsFloat[i] = true
+			} else {
+				colIsInt[i] = false
+				colIsFloat[i] = false
+			}
 		}
 
 		// Ecriture des lignes
@@ -475,25 +503,25 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 							cell.SetString(fmt.Sprintf("%v", v))
 						}
 					} else if colIsInt[i] {
-						// Affichage sans décimales
+						// Écriture en tant qu'entier natif
 						switch v := val.(type) {
 						case int, int8, int16, int32, int64:
 							cell.SetInt64(reflect.ValueOf(v).Int())
 						case uint, uint8, uint16, uint32, uint64:
 							cell.SetInt64(int64(reflect.ValueOf(v).Uint()))
-						case float64:
-							cell.SetInt64(int64(v))
-						case float32:
-							cell.SetInt64(int64(v))
+						case float64, float32:
+							f, _ := anyToFloat64(v)
+							cell.SetInt64(int64(f))
 						case string:
-							n, err := strconv.Atoi(v)
-							if err == nil {
-								cell.SetInt(n)
+							if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+								cell.SetInt64(n)
+							} else if f, err := strconv.ParseFloat(v, 64); err == nil {
+								cell.SetInt64(int64(f))
 							} else {
-								cell.SetString(v)
+								cell.SetString("")
 							}
 						default:
-							cell.SetString(fmt.Sprintf("%v", v))
+							cell.SetString("")
 						}
 					} else {
 						// Texte
@@ -513,4 +541,35 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 	}
 
 	return StatusComplete, results, csvPath, xlsPath, ""
+}
+
+func anyToFloat64(v interface{}) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case float32:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	case int32:
+		return float64(x), true
+	case int16:
+		return float64(x), true
+	case int8:
+		return float64(x), true
+	case uint:
+		return float64(x), true
+	case uint64:
+		return float64(x), true
+	case uint32:
+		return float64(x), true
+	case uint16:
+		return float64(x), true
+	case uint8:
+		return float64(x), true
+	default:
+		return 0, false
+	}
 }
