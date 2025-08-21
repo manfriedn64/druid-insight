@@ -12,6 +12,7 @@ const (
 	StatusProcessing ReportStatus = "processing"
 	StatusComplete   ReportStatus = "complete"
 	StatusError      ReportStatus = "error"
+	StatusExpired    ReportStatus = "expired" // <-- ajout
 )
 
 // Stockage d’une requête à traiter

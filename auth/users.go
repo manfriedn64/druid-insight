@@ -39,7 +39,8 @@ type Config struct {
 		DBHashMacro string `yaml:"db_hash_macro"`
 		DBPassHash  bool   `yaml:"db_pass_hash"`
 	} `yaml:"auth"`
-	Context map[string]string `yaml:"context"` // contexte global pour les requêtes Druid{
+	Context         map[string]string `yaml:"context"`            // contexte global pour les requêtes Druid{
+	MaxFileAgeHours int               `yaml:"max_file_age_hours"` // durée max en heures
 }
 
 type UsersFile struct {

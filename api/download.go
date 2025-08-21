@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // DownloadReportCSV télécharge le CSV ou l'Excel du rapport demandé (nécessite JWT valide)
@@ -47,9 +48,20 @@ func DownloadReportCSV(cfg *auth.Config) http.HandlerFunc {
 		}
 
 		// Vérification existence
-		if _, err := os.Stat(filePath); err != nil {
+		info, err := os.Stat(filePath)
+		if err != nil {
 			http.Error(w, "Fichier non trouvé pour ce rapport", http.StatusNotFound)
 			return
+		}
+
+		// Vérification d'expiration si configurée
+		maxAge := time.Duration(cfg.MaxFileAgeHours) * time.Hour
+		if cfg.MaxFileAgeHours > 0 {
+			age := time.Since(info.ModTime())
+			if age > maxAge {
+				http.Error(w, "Fichier expiré", http.StatusGone)
+				return
+			}
 		}
 
 		// Log (optionnel)
