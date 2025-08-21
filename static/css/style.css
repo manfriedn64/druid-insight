@@ -168,7 +168,7 @@
   height: 40px;
 }
 
-.download-csv-btn {
+.download-btn {
   background: linear-gradient(90deg, #4653f4, #8a7bfa 95%);
   color: #fff;
   border: none;
@@ -183,5 +183,5 @@
   transition: opacity 0.13s, background 0.18s;
   display: inline-block;
 }
-.download-csv-btn:active { opacity: 0.85; }
-.download-csv-btn:hover { background: #2732b9; }
+.download-btn:active { opacity: 0.85; }
+.download-btn:hover { background: #2732b9; }

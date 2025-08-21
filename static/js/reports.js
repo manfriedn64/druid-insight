@@ -19,8 +19,8 @@ function renderResultsList() {
     block.innerHTML = `
       <div style="font-size:1.04em;"><b>Report from ${r.dt}</b></div>
       <div>
-        <button class="download-csv-btn" data-id="${r.url}">Download CSV file</button>
-        <button class="download-xlsx-btn" data-id="${r.url}">Download Excel file</button>
+        <button class="download-csv-btn download-btn" data-id="${r.url}">Download CSV file</button>
+        <button class="download-xlsx-btn download-btn" data-id="${r.url}">Download Excel file</button>
         <button class="share-btn" data-idx="${idx}">Share link</button>
       </div>
       <div>Taille du fichier : <b>${(r.bytes/1024).toFixed(1)} Ko</b></div>
