@@ -30,10 +30,10 @@ func ReportStatusHandler(cfg *auth.Config) http.HandlerFunc {
 			out := map[string]interface{}{
 				"status": rr.Status,
 			}
-			/*if rr.Status == worker.StatusComplete {
-				out["result"] = rr.Result
+			if rr.Status == worker.StatusComplete {
 				out["csv"] = rr.CSVPath
-			}*/
+				out["excel"] = rr.XLSPath
+			}
 			if rr.Status == worker.StatusError {
 				out["error"] = rr.ErrorMsg
 			}

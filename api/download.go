@@ -10,7 +10,8 @@ import (
 	"strings"
 )
 
-// DownloadReportCSV télécharge le CSV du rapport demandé (nécessite JWT valide)
+// DownloadReportCSV télécharge le CSV ou l'Excel du rapport demandé (nécessite JWT valide)
+// Paramètre GET: id (obligatoire), type=csv|excel (optionnel, défaut: csv)
 func DownloadReportCSV(cfg *auth.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Validation du JWT
@@ -27,21 +28,36 @@ func DownloadReportCSV(cfg *auth.Config) http.HandlerFunc {
 			return
 		}
 
-		// Chemin du fichier
-		csvPath := filepath.Join("csv", reportID+".csv")
+		// Extraction du type de fichier (csv par défaut)
+		fileType := r.URL.Query().Get("type")
+		if fileType == "" {
+			fileType = "csv"
+		}
+
+		var filePath, contentType, fileName string
+		switch strings.ToLower(fileType) {
+		case "excel", "xlsx":
+			filePath = filepath.Join("xls", reportID+".xlsx")
+			contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+			fileName = fmt.Sprintf("report_%s.xlsx", strings.ReplaceAll(reportID, "\"", ""))
+		default:
+			filePath = filepath.Join("csv", reportID+".csv")
+			contentType = "text/csv"
+			fileName = fmt.Sprintf("report_%s.csv", strings.ReplaceAll(reportID, "\"", ""))
+		}
 
 		// Vérification existence
-		if _, err := os.Stat(csvPath); err != nil {
-			http.Error(w, "Fichier CSV non trouvé pour ce rapport", http.StatusNotFound)
+		if _, err := os.Stat(filePath); err != nil {
+			http.Error(w, "Fichier non trouvé pour ce rapport", http.StatusNotFound)
 			return
 		}
 
 		// Log (optionnel)
-		log.Printf("[DOWNLOAD] user=%s id=%s path=%s\n", username, reportID, csvPath)
+		log.Printf("[DOWNLOAD] user=%s id=%s type=%s path=%s\n", username, reportID, fileType, filePath)
 
-		// Envoi du fichier CSV
-		w.Header().Set("Content-Type", "text/csv")
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"report_%s.csv\"", strings.ReplaceAll(reportID, "\"", "")))
-		http.ServeFile(w, r, csvPath)
+		// Envoi du fichier
+		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileName))
+		http.ServeFile(w, r, filePath)
 	}
 }

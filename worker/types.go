@@ -30,5 +30,6 @@ type ReportResult struct {
 	Status   ReportStatus
 	Result   interface{} // []map[string]interface{} ou autre
 	CSVPath  string
+	XLSPath  string
 	ErrorMsg string
 }

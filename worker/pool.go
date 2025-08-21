@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"druid-insight/config"
 	"druid-insight/druid"
 	"druid-insight/logging"
+
+	"github.com/tealeg/xlsx/v3"
 )
 
 // Maps et file d’attente FIFO
@@ -72,11 +75,12 @@ func reportWorker(druidCfg *config.DruidConfig, reportLogger *logging.Logger, cf
 
 		reportLogger.Write("[START] id=" + nextID + " owner=" + req.Owner)
 
-		status, result, csvPath, errMsg := ProcessRequest(req, druidCfg, reportLogger, cfg)
+		status, result, csvPath, xlsPath, errMsg := ProcessRequest(req, druidCfg, reportLogger, cfg)
 		processingRequests.Store(nextID, &ReportResult{
 			Status:   status,
 			Result:   result,
 			CSVPath:  csvPath,
+			XLSPath:  xlsPath,
 			ErrorMsg: errMsg,
 		})
 	}
@@ -139,7 +143,7 @@ func ComputeIntervals(start, end, compare string) (mainInterval, compareInterval
 }
 
 // Utilise les helpers du module druid pour exécuter la requête et générer un CSV
-func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *logging.Logger, cfg *auth.Config) (ReportStatus, interface{}, string, string) {
+func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *logging.Logger, cfg *auth.Config) (ReportStatus, interface{}, string, string, string) {
 	// Récupération des paramètres attendus dans le payload (dimensions, metrics, filters, intervals)
 	var dims, mets []string
 	var filters []interface{}
@@ -181,7 +185,7 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 				mainInterval, compareInterval, err := ComputeIntervals(start, end, compare)
 				if err != nil {
 					logger.Write(fmt.Sprintf("[FAIL] id=%s bad interval: %v", req.ID, err))
-					return StatusError, nil, "", "Intervalle invalide"
+					return StatusError, nil, "", "", "Intervalle invalide"
 				}
 				intervals = append(intervals, mainInterval)
 				if compareInterval != "" {
@@ -195,7 +199,7 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 	ds, ok := druidCfg.Datasources[req.Datasource]
 	if !ok {
 		logger.Write(fmt.Sprintf("[FAIL] id=%s unknown datasource %s", req.ID, req.Datasource))
-		return StatusError, nil, "", "Datasource inconnue"
+		return StatusError, nil, "", "", "Datasource inconnue"
 	}
 
 	granularity := "all"
@@ -221,67 +225,82 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 	)
 	if err != nil {
 		logger.Write(fmt.Sprintf("[FAIL] id=%s buildquery: %v", req.ID, err))
-		return StatusError, nil, "", "Erreur construction requête Druid"
+		return StatusError, nil, "", "", "Erreur construction requête Druid"
 	}
 
 	// 3. Exécuter la requête avec ExecuteDruidQuery
 	results, err := druid.ExecuteDruidQuery(druidCfg.HostURL+"/druid/v2/", query)
 	if err != nil {
 		logger.Write(fmt.Sprintf("[FAIL] id=%s druid error: %v", req.ID, err))
-		return StatusError, nil, "", fmt.Sprintf("Erreur Druid: %v", err)
+		return StatusError, nil, "", "", fmt.Sprintf("Erreur Druid: %v", err)
 	}
 
 	// 4. Générer un CSV dans csv/<id>.csv
 	csvDir := "csv"
 	if err := os.MkdirAll(csvDir, 0755); err != nil {
 		logger.Write(fmt.Sprintf("[FAIL] id=%s mkdir csv: %v", req.ID, err))
-		return StatusError, nil, "", "Impossible de créer le dossier csv/"
+		return StatusError, nil, "", "", "Impossible de créer le dossier csv/"
 	}
 	csvPath := filepath.Join(csvDir, req.ID+".csv")
 
 	f, err := os.Create(csvPath)
 	if err != nil {
 		logger.Write(fmt.Sprintf("[FAIL] id=%s create csv: %v", req.ID, err))
-		return StatusError, nil, "", "Impossible de créer le fichier CSV"
+		return StatusError, nil, "", "", "Impossible de créer le fichier CSV"
 	}
 	defer f.Close()
 
 	w := csv.NewWriter(f)
 	defer w.Flush()
 
+	// Construction des headers triés ---
+	// On veut: time (si présent), puis dimensions (alpha), puis métriques (alpha)
+	var headers []string
+	// Récupère les dimensions et métriques demandées
+	dimSet := map[string]bool{}
+	for _, d := range dims {
+		dimSet[d] = true
+	}
+	metSet := map[string]bool{}
+	for _, m := range mets {
+		metSet[m] = true
+	}
+	// Détecte la colonne time
+	hasTime := dimSet["time"]
+	// Trie les dimensions et métriques (hors time)
+	var dimHeaders, metHeaders []string
+	for d := range dimSet {
+		if d != "time" {
+			dimHeaders = append(dimHeaders, d)
+		}
+	}
+	for m := range metSet {
+		metHeaders = append(metHeaders, m)
+	}
+	sort.Strings(dimHeaders)
+	sort.Strings(metHeaders)
+	if hasTime {
+		headers = append(headers, "time")
+	}
+	headers = append(headers, dimHeaders...)
+	headers = append(headers, metHeaders...)
+
 	if len(results) == 0 {
-		// Tente quand même d’extraire les headers pour un CSV vide
-		var headers []string
-		// Optionnel : tu peux garder les headers précédemment calculés, ou tenter une structure attendue
-		// Si pas de headers connus, log + continue quand même
 		// Écrit le CSV vide (headers seuls)
 		if len(headers) > 0 {
 			if err := w.Write(headers); err != nil {
 				logger.Write(fmt.Sprintf("[FAIL] id=%s write csv header: %v", req.ID, err))
-				return StatusError, nil, "", "Erreur d'écriture CSV"
+				return StatusError, nil, "", "", "Erreur d'écriture CSV"
 			}
 		}
 		logger.Write(fmt.Sprintf("[COMPLETE] id=%s aucun résultat (fichier CSV vide)", req.ID))
-		return StatusComplete, results, csvPath, "Aucune donnée retournée par Druid"
+		return StatusComplete, results, csvPath, "", "Aucune donnée retournée par Druid"
 	}
 
-	// La structure de résultat Druid groupBy = [{event: {...}}, ...]
-	var headers []string
-	for _, res := range results {
-		if evt, ok := res["event"].(map[string]interface{}); ok && len(evt) > 0 {
-			for k := range evt {
-				headers = append(headers, k)
-			}
-			break
-		}
-	}
-	if len(headers) == 0 {
-		logger.Write(fmt.Sprintf("[FAIL] id=%s pas d'entêtes", req.ID))
-		return StatusError, nil, "", "Impossible d'extraire les colonnes"
-	}
+	// Utilise les headers triés pour écrire le CSV ---
 	if err := w.Write(headers); err != nil {
 		logger.Write(fmt.Sprintf("[FAIL] id=%s write csv header: %v", req.ID, err))
-		return StatusError, nil, "", "Erreur d'écriture CSV"
+		return StatusError, nil, "", "", "Erreur d'écriture CSV"
 	}
 
 	// Ecriture des lignes
@@ -292,7 +311,6 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 				val := evt[col]
 				if col == "time" && val != nil {
 					// Conversion timestamp -> string
-					// Le timestamp Druid est en millisecondes
 					var t time.Time
 					switch val := val.(type) {
 					case float64:
@@ -302,12 +320,10 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 					case string:
 						i, err := strconv.Atoi(val)
 						if err != nil {
-							// Peut arriver si Druid est en mode ISO string
 							parsed, err := time.Parse(time.RFC3339, val)
 							if err == nil {
 								t = parsed
 							} else {
-								// valeur non parseable, tu la laisses brute
 								rec = append(rec, fmt.Sprintf("%s", val))
 								continue
 							}
@@ -315,12 +331,10 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 							t = time.Unix(int64(i)/1000, (int64(i)%1000)*int64(time.Millisecond))
 						}
 					default:
-						// type inconnu, laisses brute
 						rec = append(rec, fmt.Sprintf("%s", val))
 						continue
 					}
-					// Format voulu :
-					s := t.Format("2006-01-02 15") // YYYY-MM-DD HH
+					s := t.Format("2006-01-02 15")
 					rec = append(rec, s)
 				} else {
 					switch v := val.(type) {
@@ -329,7 +343,6 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 					case uint, uint8, uint16, uint32, uint64:
 						rec = append(rec, fmt.Sprintf("%d", v))
 					case float64:
-						// Pour les floats, sans notation scientifique, entier si c'est censé l'être
 						rec = append(rec, strconv.FormatFloat(v, 'f', -1, 64))
 					case float32:
 						rec = append(rec, strconv.FormatFloat(float64(v), 'f', -1, 32))
@@ -338,8 +351,6 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 					case nil:
 						rec = append(rec, "")
 					default:
-						// fallback : affichage brut (rare)
-						// Pour les types numériques encodés dynamiquement en float64 (ex : Druid renvoie souvent int en float64)
 						rv := reflect.ValueOf(v)
 						if rv.Kind() == reflect.Float64 {
 							rec = append(rec, strconv.FormatFloat(rv.Float(), 'f', -1, 64))
@@ -353,11 +364,153 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 			}
 			if err := w.Write(rec); err != nil {
 				logger.Write(fmt.Sprintf("[FAIL] id=%s write csv row: %v", req.ID, err))
-				return StatusError, nil, "", "Erreur d'écriture CSV"
+				return StatusError, nil, "", "", "Erreur d'écriture CSV"
 			}
 		}
 	}
 
 	logger.Write(fmt.Sprintf("[COMPLETE] id=%s lignes=%d fichier=%s", req.ID, len(results), csvPath))
-	return StatusComplete, results, csvPath, ""
+
+	// Génération du fichier Excel
+	xlsDir := "xls"
+	if err := os.MkdirAll(xlsDir, 0755); err != nil {
+		logger.Write(fmt.Sprintf("[FAIL] id=%s mkdir xls: %v", req.ID, err))
+		return StatusError, nil, "", "", "Impossible de créer le dossier xls/"
+	}
+	xlsPath := filepath.Join(xlsDir, req.ID+".xlsx")
+
+	xlsxFile := xlsx.NewFile()
+	sheet, err := xlsxFile.AddSheet("Report")
+	if err != nil {
+		logger.Write(fmt.Sprintf("[FAIL] id=%s create xlsx sheet: %v", req.ID, err))
+	} else {
+		// Ecriture de l'en-tête
+		row := sheet.AddRow()
+		for _, h := range headers {
+			row.AddCell().SetString(h)
+		}
+
+		// Préparation pour le typage des colonnes
+		colIsFloat := make(map[int]bool)
+		colIsInt := make(map[int]bool)
+		colValues := make([][]interface{}, len(headers))
+
+		// Collecte des valeurs pour typage
+		for _, res := range results {
+			if evt, ok := res["event"].(map[string]interface{}); ok {
+				for i, col := range headers {
+					val := evt[col]
+					colValues[i] = append(colValues[i], val)
+				}
+			}
+		}
+		// Détection du type de chaque colonne
+		for i, vals := range colValues {
+			isFloat, isInt := false, true
+			for _, v := range vals {
+				switch v := v.(type) {
+				case float64, float32:
+					isFloat = true
+					if float64Val, ok := v.(float64); ok && float64Val != float64(int64(float64Val)) {
+						isInt = false
+					}
+				case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+					// reste int
+				case string:
+					isInt = false
+					isFloat = false
+				}
+			}
+			colIsFloat[i] = isFloat && !isInt
+			colIsInt[i] = isInt && !isFloat
+		}
+
+		// Ecriture des lignes
+		for _, res := range results {
+			if evt, ok := res["event"].(map[string]interface{}); ok {
+				row := sheet.AddRow()
+				for i, col := range headers {
+					val := evt[col]
+					cell := row.AddCell()
+					if col == "time" && val != nil {
+						var t time.Time
+						switch val := val.(type) {
+						case float64:
+							t = time.Unix(int64(val)/1000, (int64(val)%1000)*int64(time.Millisecond))
+						case int64:
+							t = time.Unix(val/1000, (val%1000)*int64(time.Millisecond))
+						case string:
+							i, err := strconv.Atoi(val)
+							if err != nil {
+								parsed, err := time.Parse(time.RFC3339, val)
+								if err == nil {
+									t = parsed
+								} else {
+									cell.SetString(val)
+									continue
+								}
+							} else {
+								t = time.Unix(int64(i)/1000, (int64(i)%1000)*int64(time.Millisecond))
+							}
+						default:
+							cell.SetString(fmt.Sprintf("%v", val))
+							continue
+						}
+						cell.SetString(t.Format("2006-01-02 15"))
+					} else if colIsFloat[i] {
+						// Affichage arrondi à 2 décimales
+						switch v := val.(type) {
+						case float64:
+							cell.SetFloatWithFormat(v, "0.00")
+						case float32:
+							cell.SetFloatWithFormat(float64(v), "0.00")
+						case string:
+							f, err := strconv.ParseFloat(v, 64)
+							if err == nil {
+								cell.SetFloatWithFormat(f, "0.00")
+							} else {
+								cell.SetString(v)
+							}
+						default:
+							cell.SetString(fmt.Sprintf("%v", v))
+						}
+					} else if colIsInt[i] {
+						// Affichage sans décimales
+						switch v := val.(type) {
+						case int, int8, int16, int32, int64:
+							cell.SetInt64(reflect.ValueOf(v).Int())
+						case uint, uint8, uint16, uint32, uint64:
+							cell.SetInt64(int64(reflect.ValueOf(v).Uint()))
+						case float64:
+							cell.SetInt64(int64(v))
+						case float32:
+							cell.SetInt64(int64(v))
+						case string:
+							n, err := strconv.Atoi(v)
+							if err == nil {
+								cell.SetInt(n)
+							} else {
+								cell.SetString(v)
+							}
+						default:
+							cell.SetString(fmt.Sprintf("%v", v))
+						}
+					} else {
+						// Texte
+						if v, ok := val.(string); ok {
+							cell.SetString(v)
+						} else {
+							cell.SetString(fmt.Sprintf("%v", val))
+						}
+					}
+				}
+			}
+		}
+		// Sauvegarde du fichier
+		if err := xlsxFile.Save(xlsPath); err != nil {
+			logger.Write(fmt.Sprintf("[FAIL] id=%s write xlsx: %v", req.ID, err))
+		}
+	}
+
+	return StatusComplete, results, csvPath, xlsPath, ""
 }
