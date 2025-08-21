@@ -30,13 +30,14 @@ func BuildAggsAndPostAggs(metrics []string, ds config.DruidDatasourceSchema) (ag
 				if !ok || base.Druid == "" {
 					return nil, nil, fmt.Errorf("metric %s used in formula %s not found", f, m)
 				}
-				if !aggsSet[f] {
+				aggName := "sum_" + f // convention pour sum(x)
+				if !aggsSet[aggName] {
 					aggs = append(aggs, map[string]interface{}{
 						"type":      "doubleSum", // TODO: rendre dynamique selon métrique
-						"name":      f,
+						"name":      aggName,
 						"fieldName": base.Druid,
 					})
-					aggsSet[f] = true
+					aggsSet[aggName] = true
 				}
 			}
 			postAggs = append(postAggs, NodeToDruidPostAgg(m, node))
@@ -55,7 +56,7 @@ func BuildAggsAndPostAggs(metrics []string, ds config.DruidDatasourceSchema) (ag
 }
 
 // BuildDruidQuery construit la requête groupBy pour Druid (JSON map) à partir des inputs
-func BuildDruidQuery(dsName string, dims []string, mets []string, userFilters interface{}, intervals []string, ds config.DruidDatasourceSchema, granularity string, username string, isAdmin bool, druidCfg *config.DruidConfig, cfg *auth.Config, owner string) (map[string]interface{}, error) {
+func BuildDruidQuery(dsName string, dims []string, mets []string, userFilters interface{}, intervals []string, ds config.DruidDatasourceSchema, granularity string, username string, isAdmin bool, druidCfg *config.DruidConfig, cfg *auth.Config, owner string, context string) (map[string]interface{}, error) {
 	var usersFile *auth.UsersFile
 
 	var druidDims []interface{}
@@ -119,7 +120,16 @@ func BuildDruidQuery(dsName string, dims []string, mets []string, userFilters in
 		if !ok {
 			return nil, fmt.Errorf("unknown dimension: %s", d)
 		}
-		druidDims = append(druidDims, dr.Druid)
+		if dr.Lookup != "" {
+			druidDims = append(druidDims, map[string]interface{}{
+				"type":       "lookup",
+				"dimension":  dr.Druid,
+				"outputName": d,
+				"name":       dr.Lookup,
+			})
+		} else {
+			druidDims = append(druidDims, dr.Druid)
+		}
 	}
 	aggs, postAggs, err := BuildAggsAndPostAggs(mets, ds)
 	if err != nil {
@@ -146,9 +156,9 @@ func BuildDruidQuery(dsName string, dims []string, mets []string, userFilters in
 	druidDimFilter := ConvertFiltersToDruidDimFilter(combinedFilters, ds)
 
 	query := map[string]interface{}{
-		"context":      map[string]string{"application": "druid-insight"},
+		"context":      map[string]string{"application": context},
 		"queryType":    "groupBy",
-		"dataSource":   dsName,
+		"dataSource":   ds.DruidName,
 		"dimensions":   druidDims,
 		"granularity":  g,
 		"aggregations": aggs,
@@ -202,12 +212,24 @@ func ConvertFiltersToDruidDimFilter(filters []interface{}, ds config.DruidDataso
 				svalues = append(svalues, sv)
 			}
 		}
-		dimName := ds.Dimensions[dimKey].Druid
-		filterFields = append(filterFields, map[string]interface{}{
-			"type":      "in",
-			"dimension": dimName,
-			"values":    svalues,
-		})
+		field := ds.Dimensions[dimKey]
+		if field.Lookup != "" {
+			filterFields = append(filterFields, map[string]interface{}{
+				"type":      "in",
+				"dimension": field.Druid,
+				"values":    svalues,
+				"extractionFn": map[string]interface{}{
+					"type":   "lookup",
+					"lookup": field.Lookup,
+				},
+			})
+		} else {
+			filterFields = append(filterFields, map[string]interface{}{
+				"type":      "in",
+				"dimension": field.Druid,
+				"values":    svalues,
+			})
+		}
 	}
 	if len(filterFields) == 0 {
 		return nil

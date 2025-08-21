@@ -55,6 +55,34 @@ func TestBuildAggsAndPostAggs_Formula(t *testing.T) {
 	}
 }
 
+func TestBuildAggsAndPostAggs_SumFunction(t *testing.T) {
+	ds := makeTestDruidSchema()
+	ds.Metrics["revenue"] = config.DruidField{Druid: "revenue"}
+	ds.Metrics["imps"] = config.DruidField{Druid: "imps"}
+	ds.Metrics["cpm"] = config.DruidField{Formula: "sum(revenue) / sum(imps)"}
+
+	aggs, postAggs, err := BuildAggsAndPostAggs([]string{"cpm"}, ds)
+	if err != nil {
+		t.Fatalf("BuildAggsAndPostAggs failed: %v", err)
+	}
+	names := []string{aggs[0]["name"].(string), aggs[1]["name"].(string)}
+	if !(contains(names, "sum_revenue") && contains(names, "sum_imps")) {
+		t.Errorf("Expected aggs for sum_revenue and sum_imps, got %v", names)
+	}
+	if len(postAggs) != 1 {
+		t.Errorf("Expected 1 postAgg for cpm, got %v", postAggs)
+	}
+}
+
+func contains(arr []string, v string) bool {
+	for _, s := range arr {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
 func TestMergeWithAccessFilters(t *testing.T) {
 	ds := makeTestDruidSchema()
 	userFilters := []interface{}{
@@ -116,7 +144,7 @@ func TestBuildDruidQuery_UnknownDimension(t *testing.T) {
 	druidCfg := &config.DruidConfig{
 		Datasources: map[string]config.DruidDatasourceSchema{"myds": ds},
 	}
-	_, err := BuildDruidQuery("myds", []string{"unknown"}, []string{"requests"}, nil, nil, ds, "all", "alice", false, druidCfg, cfg, "")
+	_, err := BuildDruidQuery("myds", []string{"unknown"}, []string{"requests"}, nil, nil, ds, "all", "alice", false, druidCfg, cfg, "", "test")
 	if err == nil {
 		t.Error("Expected error for unknown dimension, got nil")
 	}
@@ -128,7 +156,7 @@ func TestBuildDruidQuery_Basic(t *testing.T) {
 	druidCfg := &config.DruidConfig{
 		Datasources: map[string]config.DruidDatasourceSchema{"myds": ds},
 	}
-	query, err := BuildDruidQuery("myds", []string{"browser"}, []string{"requests"}, nil, nil, ds, "all", "alice", false, druidCfg, cfg, "")
+	query, err := BuildDruidQuery("myds", []string{"browser"}, []string{"requests"}, nil, nil, ds, "all", "alice", false, druidCfg, cfg, "", "test")
 	if err != nil {
 		t.Fatalf("BuildDruidQuery failed: %v", err)
 	}
@@ -137,5 +165,39 @@ func TestBuildDruidQuery_Basic(t *testing.T) {
 	}
 	if !reflect.DeepEqual(query["dimensions"], []interface{}{"browser"}) {
 		t.Errorf("Expected dimensions ['browser'], got %v", query["dimensions"])
+	}
+}
+
+func TestBuildDruidQuery_LookupDimension(t *testing.T) {
+	ds := makeTestDruidSchema()
+	ds.Dimensions["country"] = config.DruidField{Druid: "country_code", Lookup: "country_lookup"}
+	cfg := &auth.Config{}
+	druidCfg := &config.DruidConfig{
+		Datasources: map[string]config.DruidDatasourceSchema{"myds": ds},
+	}
+	query, err := BuildDruidQuery("myds", []string{"country"}, []string{"requests"}, nil, nil, ds, "all", "alice", false, druidCfg, cfg, "", "test")
+	if err != nil {
+		t.Fatalf("BuildDruidQuery failed: %v", err)
+	}
+	dims := query["dimensions"].([]interface{})
+	dim := dims[0].(map[string]interface{})
+	if dim["type"] != "lookup" || dim["name"] != "country_lookup" {
+		t.Errorf("Expected lookup dimension, got %v", dim)
+	}
+}
+
+func TestConvertFiltersToDruidDimFilter_Lookup(t *testing.T) {
+	ds := makeTestDruidSchema()
+	ds.Dimensions["country"] = config.DruidField{Druid: "country_code", Lookup: "country_lookup"}
+	filters := []interface{}{
+		map[string]interface{}{"dimension": "country", "values": []interface{}{"France"}},
+	}
+	filter := ConvertFiltersToDruidDimFilter(filters, ds)
+	m, ok := filter.(map[string]interface{})
+	if !ok || m["type"] != "in" {
+		t.Errorf("Expected 'in' filter, got %v", filter)
+	}
+	if m["extractionFn"] == nil {
+		t.Errorf("Expected extractionFn for lookup, got %v", m)
 	}
 }

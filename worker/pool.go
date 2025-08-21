@@ -217,6 +217,7 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 		druidCfg,
 		cfg,
 		req.Owner,
+		req.Context,
 	)
 	if err != nil {
 		logger.Write(fmt.Sprintf("[FAIL] id=%s buildquery: %v", req.ID, err))

@@ -39,6 +39,7 @@ type Config struct {
 		DBHashMacro string `yaml:"db_hash_macro"`
 		DBPassHash  bool   `yaml:"db_pass_hash"`
 	} `yaml:"auth"`
+	Context map[string]string `yaml:"context"` // contexte global pour les requêtes Druid{
 }
 
 type UsersFile struct {
