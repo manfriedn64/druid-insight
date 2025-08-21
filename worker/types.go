@@ -22,6 +22,7 @@ type ReportRequest struct {
 	Admin      bool                   // user admin ?
 	Datasource string                 // ex: myreport
 	CreatedAt  time.Time
+	Context    string
 }
 
 // Résultat traité

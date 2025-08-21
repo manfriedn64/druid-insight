@@ -56,7 +56,7 @@ func BuildAggsAndPostAggs(metrics []string, ds config.DruidDatasourceSchema) (ag
 }
 
 // BuildDruidQuery construit la requête groupBy pour Druid (JSON map) à partir des inputs
-func BuildDruidQuery(dsName string, dims []string, mets []string, userFilters interface{}, intervals []string, ds config.DruidDatasourceSchema, granularity string, username string, isAdmin bool, druidCfg *config.DruidConfig, cfg *auth.Config, owner string) (map[string]interface{}, error) {
+func BuildDruidQuery(dsName string, dims []string, mets []string, userFilters interface{}, intervals []string, ds config.DruidDatasourceSchema, granularity string, username string, isAdmin bool, druidCfg *config.DruidConfig, cfg *auth.Config, owner string, context string) (map[string]interface{}, error) {
 	var usersFile *auth.UsersFile
 
 	var druidDims []interface{}
@@ -156,7 +156,7 @@ func BuildDruidQuery(dsName string, dims []string, mets []string, userFilters in
 	druidDimFilter := ConvertFiltersToDruidDimFilter(combinedFilters, ds)
 
 	query := map[string]interface{}{
-		"context":      map[string]string{"application": "druid-insight"},
+		"context":      map[string]string{"application": context},
 		"queryType":    "groupBy",
 		"dataSource":   ds.DruidName,
 		"dimensions":   druidDims,

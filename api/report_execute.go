@@ -8,6 +8,8 @@ import (
 	"druid-insight/worker"
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -45,6 +47,30 @@ func ReportExecuteHandler(cfg *auth.Config, users *auth.UsersFile, druidCfg *con
 			accessLogger.Write("EXECUTE_FORBIDDEN user=" + username + " problems=" + jsonString(problems))
 			return
 		}
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			origin = r.Header.Get("Referer")
+		}
+		domain := origin
+		if origin != "" {
+			u, err := url.Parse(origin)
+			if err == nil {
+				domain = u.Host
+			} else {
+				origin = strings.TrimPrefix(origin, "http://")
+				origin = strings.TrimPrefix(origin, "https://")
+				parts := strings.Split(origin, "/")
+				domain = parts[0]
+			}
+		}
+		switch domain {
+		case "dashboard.mediasquare.fr", "publishers.mediasquare.fr":
+			domain = "dashboard-publishers"
+		case "druid-insight.mediasquare.fr":
+			domain = "druid-insight"
+		case "":
+			domain = "direct"
+		}
 		id := utils.GenerateRequestID()
 		req := &worker.ReportRequest{
 			ID:         id,
@@ -53,6 +79,7 @@ func ReportExecuteHandler(cfg *auth.Config, users *auth.UsersFile, druidCfg *con
 			Admin:      isAdmin,
 			Datasource: datasource,
 			CreatedAt:  time.Now(),
+			Context:    domain,
 		}
 		worker.AddPendingRequest(req)
 		w.Header().Set("Content-Type", "application/json")

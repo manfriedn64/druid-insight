@@ -144,7 +144,7 @@ func TestBuildDruidQuery_UnknownDimension(t *testing.T) {
 	druidCfg := &config.DruidConfig{
 		Datasources: map[string]config.DruidDatasourceSchema{"myds": ds},
 	}
-	_, err := BuildDruidQuery("myds", []string{"unknown"}, []string{"requests"}, nil, nil, ds, "all", "alice", false, druidCfg, cfg, "")
+	_, err := BuildDruidQuery("myds", []string{"unknown"}, []string{"requests"}, nil, nil, ds, "all", "alice", false, druidCfg, cfg, "", "test")
 	if err == nil {
 		t.Error("Expected error for unknown dimension, got nil")
 	}
@@ -156,7 +156,7 @@ func TestBuildDruidQuery_Basic(t *testing.T) {
 	druidCfg := &config.DruidConfig{
 		Datasources: map[string]config.DruidDatasourceSchema{"myds": ds},
 	}
-	query, err := BuildDruidQuery("myds", []string{"browser"}, []string{"requests"}, nil, nil, ds, "all", "alice", false, druidCfg, cfg, "")
+	query, err := BuildDruidQuery("myds", []string{"browser"}, []string{"requests"}, nil, nil, ds, "all", "alice", false, druidCfg, cfg, "", "test")
 	if err != nil {
 		t.Fatalf("BuildDruidQuery failed: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestBuildDruidQuery_LookupDimension(t *testing.T) {
 	druidCfg := &config.DruidConfig{
 		Datasources: map[string]config.DruidDatasourceSchema{"myds": ds},
 	}
-	query, err := BuildDruidQuery("myds", []string{"country"}, []string{"requests"}, nil, nil, ds, "all", "alice", false, druidCfg, cfg, "")
+	query, err := BuildDruidQuery("myds", []string{"country"}, []string{"requests"}, nil, nil, ds, "all", "alice", false, druidCfg, cfg, "", "test")
 	if err != nil {
 		t.Fatalf("BuildDruidQuery failed: %v", err)
 	}
