@@ -63,12 +63,10 @@ func ReportExecuteHandler(cfg *auth.Config, users *auth.UsersFile, druidCfg *con
 				domain = parts[0]
 			}
 		}
-		switch domain {
-		case "dashboard.mediasquare.fr", "publishers.mediasquare.fr":
-			domain = "dashboard-publishers"
-		case "druid-insight.mediasquare.fr":
-			domain = "druid-insight"
-		case "":
+		if _, ok := cfg.Context[domain]; ok {
+			domain = cfg.Context[domain]
+		}
+		if domain == "" {
 			domain = "direct"
 		}
 		id := utils.GenerateRequestID()
