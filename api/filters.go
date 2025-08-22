@@ -115,7 +115,7 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *config.DruidConfig) http.Han
 		druidQuery := map[string]interface{}{
 			"context":     map[string]string{"application": "druid-insight"},
 			"queryType":   "groupBy",
-			"dataSource":  filterReq.Datasource,
+			"dataSource":  dsConfig.DruidName, // <-- Utilise le nom réel Druid
 			"dimensions":  []string{druidDimension.Druid},
 			"granularity": "all",
 			"intervals":   []string{"1000-01-01T00:00:00.000Z/3000-01-01T00:00:00.000Z"},
