@@ -236,12 +236,15 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 	}
 
 	// 4. Générer un CSV dans csv/<id>.csv
-	csvDir := "csv"
+	csvDir := filepath.Join("reports", req.Owner, "csv")
+	xlsDir := filepath.Join("reports", req.Owner, "xls")
+
 	if err := os.MkdirAll(csvDir, 0755); err != nil {
 		logger.Write(fmt.Sprintf("[FAIL] id=%s mkdir csv: %v", req.ID, err))
 		return StatusError, nil, "", "", "Impossible de créer le dossier csv/"
 	}
 	csvPath := filepath.Join(csvDir, req.ID+".csv")
+	xlsPath := filepath.Join(xlsDir, req.ID+".xlsx")
 
 	f, err := os.Create(csvPath)
 	if err != nil {
@@ -372,12 +375,10 @@ func ProcessRequest(req *ReportRequest, druidCfg *config.DruidConfig, logger *lo
 	logger.Write(fmt.Sprintf("[COMPLETE] id=%s lignes=%d fichier=%s", req.ID, len(results), csvPath))
 
 	// Génération du fichier Excel
-	xlsDir := "xls"
 	if err := os.MkdirAll(xlsDir, 0755); err != nil {
 		logger.Write(fmt.Sprintf("[FAIL] id=%s mkdir xls: %v", req.ID, err))
 		return StatusError, nil, "", "", "Impossible de créer le dossier xls/"
 	}
-	xlsPath := filepath.Join(xlsDir, req.ID+".xlsx")
 
 	xlsxFile := xlsx.NewFile()
 	sheet, err := xlsxFile.AddSheet("Report")

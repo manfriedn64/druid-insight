@@ -2,6 +2,7 @@ package api
 
 import (
 	"druid-insight/auth"
+	"druid-insight/worker"
 	"fmt"
 	"log"
 	"net/http"
@@ -38,11 +39,11 @@ func DownloadReportCSV(cfg *auth.Config) http.HandlerFunc {
 		var filePath, contentType, fileName string
 		switch strings.ToLower(fileType) {
 		case "excel", "xlsx":
-			filePath = filepath.Join("xls", reportID+".xlsx")
+			filePath = filepath.Join("reports", username, "xls", reportID+".xlsx")
 			contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 			fileName = fmt.Sprintf("report_%s.xlsx", strings.ReplaceAll(reportID, "\"", ""))
 		default:
-			filePath = filepath.Join("csv", reportID+".csv")
+			filePath = filepath.Join("reports", username, "csv", reportID+".csv")
 			contentType = "text/csv"
 			fileName = fmt.Sprintf("report_%s.csv", strings.ReplaceAll(reportID, "\"", ""))
 		}
@@ -62,6 +63,23 @@ func DownloadReportCSV(cfg *auth.Config) http.HandlerFunc {
 				http.Error(w, "Fichier expiré", http.StatusGone)
 				return
 			}
+		}
+
+		// Vérification du propriétaire
+		// On cherche la ReportRequest en mémoire
+		var owner string
+		if val, ok := worker.PendingRequests().Load(reportID); ok {
+			owner = val.(*worker.ReportRequest).Owner
+		} else if val, ok := worker.ProcessingRequests().Load(reportID); ok {
+			owner = val.(*worker.ReportRequest).Owner
+		} else {
+			// Si le rapport n'est plus en mémoire, on interdit le téléchargement (plus sécurisé)
+			http.Error(w, "Rapport inconnu ou trop ancien", http.StatusForbidden)
+			return
+		}
+		if owner != username {
+			http.Error(w, "Accès interdit à ce rapport", http.StatusForbidden)
+			return
 		}
 
 		// Log (optionnel)
