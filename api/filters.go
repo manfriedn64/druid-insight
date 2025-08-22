@@ -67,7 +67,7 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *config.DruidConfig) http.Han
 			return
 		}
 
-		cacheKey := filterReq.Datasource + "|" + druidDimension.Druid
+		cacheKey := username + "|" + filterReq.Datasource + "|" + druidDimension.Druid
 		now := time.Now()
 		if val, found := filterMemoryCache.Load(cacheKey); found {
 			cache := val.(filterCache)
