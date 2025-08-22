@@ -78,6 +78,10 @@ async function openFilterPopup(dim) {
   document.getElementById('filter-popup').style.display = '';
   setTimeout(() => document.getElementById('popup-search').focus(), 120);
 
+  // Récupère les dates sélectionnées dans les inputs
+  const dateStart = document.getElementById('start-date')?.value || "";
+  const dateEnd = document.getElementById('end-date')?.value || "";
+
   // Ensuite, fetch en arrière-plan et remplit la popup quand prêt
   try {
     const res = await apiFetch('/api/filters/values', {
@@ -87,7 +91,9 @@ async function openFilterPopup(dim) {
       },
       body: JSON.stringify({
         datasource: selectedDatasource,
-        dimension: dim
+        dimension: dim,
+        date_start: dateStart,
+        date_end: dateEnd
       })
     });
 

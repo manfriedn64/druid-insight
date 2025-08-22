@@ -25,6 +25,8 @@ var filterMemoryCache sync.Map // key = datasource|dimension, value = filterCach
 type FilterRequest struct {
 	Datasource string `json:"datasource"`
 	Dimension  string `json:"dimension"`
+	DateStart  string `json:"date_start,omitempty"`
+	DateEnd    string `json:"date_end,omitempty"`
 }
 
 type FilterResponse struct {
@@ -67,7 +69,11 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *config.DruidConfig) http.Han
 			return
 		}
 
-		cacheKey := username + "|" + filterReq.Datasource + "|" + druidDimension.Druid
+		datePart := ""
+		if filterReq.DateStart != "" && filterReq.DateEnd != "" {
+			datePart = "|" + filterReq.DateStart + "|" + filterReq.DateEnd
+		}
+		cacheKey := username + "|" + filterReq.Datasource + "|" + druidDimension.Druid + datePart
 		now := time.Now()
 		if val, found := filterMemoryCache.Load(cacheKey); found {
 			cache := val.(filterCache)
@@ -112,13 +118,18 @@ func GetDimensionValues(cfg *auth.Config, druidCfg *config.DruidConfig) http.Han
 			}
 		}
 
+		intervals := []string{"1000-01-01T00:00:00.000Z/3000-01-01T00:00:00.000Z"}
+		if filterReq.DateStart != "" && filterReq.DateEnd != "" {
+			intervals = []string{filterReq.DateStart + "T00:00:00.000Z/" + filterReq.DateEnd + "T23:59:59.999Z"}
+		}
+
 		druidQuery := map[string]interface{}{
 			"context":     map[string]string{"application": "druid-insight"},
 			"queryType":   "groupBy",
-			"dataSource":  dsConfig.DruidName, // <-- Utilise le nom réel Druid
+			"dataSource":  dsConfig.DruidName,
 			"dimensions":  []string{druidDimension.Druid},
 			"granularity": "all",
-			"intervals":   []string{"1000-01-01T00:00:00.000Z/3000-01-01T00:00:00.000Z"},
+			"intervals":   intervals,
 		}
 
 		if druidFilter != nil {
