@@ -2,7 +2,6 @@ package api
 
 import (
 	"druid-insight/auth"
-	"druid-insight/worker"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 
 // DownloadReportCSV télécharge le CSV ou l'Excel du rapport demandé (nécessite JWT valide)
 // Paramètre GET: id (obligatoire), type=csv|excel (optionnel, défaut: csv)
+// Le fichier n'est accessible que dans le dossier de l'utilisateur connecté pour sécurisé le téléchargement
 func DownloadReportCSV(cfg *auth.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Validation du JWT
@@ -63,23 +63,6 @@ func DownloadReportCSV(cfg *auth.Config) http.HandlerFunc {
 				http.Error(w, "Fichier expiré", http.StatusGone)
 				return
 			}
-		}
-
-		// Vérification du propriétaire
-		// On cherche la ReportRequest en mémoire
-		var owner string
-		if val, ok := worker.PendingRequests().Load(reportID); ok {
-			owner = val.(*worker.ReportRequest).Owner
-		} else if val, ok := worker.ProcessingRequests().Load(reportID); ok {
-			owner = val.(*worker.ReportRequest).Owner
-		} else {
-			// Si le rapport n'est plus en mémoire, on interdit le téléchargement (plus sécurisé)
-			http.Error(w, "Rapport inconnu ou trop ancien", http.StatusForbidden)
-			return
-		}
-		if owner != username {
-			http.Error(w, "Accès interdit à ce rapport", http.StatusForbidden)
-			return
 		}
 
 		// Log (optionnel)
