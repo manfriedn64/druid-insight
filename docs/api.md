@@ -82,11 +82,39 @@
 
 ---
 
-- `GET /api/reports/download?id=...`  
-  Download the CSV result of a completed report.
+- `GET /api/reports/download?id=...&type=csv|excel`  
+  Download the result of a completed report.
+
+**Parameters:**
+- `id` (required): report ID
+- `type` (optional): `csv` (default) or `excel` (for XLSX format)
 
 **Response:**  
-Returns a CSV file as attachment.
+Returns a CSV or Excel file as attachment.
+
+---
+
+## Filters
+
+- `POST /api/filters/values`  
+  Get possible values for a dimension (for filter auto-completion).
+
+**Request payload:**
+```json
+{
+  "datasource": "myreport",
+  "dimension": "browser",
+  "date_start": "2024-01-01",   // optional, filter values in this interval
+  "date_end": "2024-01-31"      // optional, filter values in this interval
+}
+```
+
+**Response:**
+```json
+{
+  "values": ["Chrome", "Firefox", "Safari"]
+}
+```
 
 ---
 
