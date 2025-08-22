@@ -33,4 +33,5 @@ type ReportResult struct {
 	CSVPath  string
 	XLSPath  string
 	ErrorMsg string
+	Owner    string
 }

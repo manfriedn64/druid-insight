@@ -38,8 +38,14 @@ func ReportStatusHandler(cfg *auth.Config) http.HandlerFunc {
 				origReqVal, ok = worker.ProcessingRequests().Load(id)
 			}
 			if ok {
-				origReq := origReqVal.(*worker.ReportRequest)
+				origReq := origReqVal.(*worker.ReportResult)
 				if origReq.Owner != username {
+					w.WriteHeader(http.StatusForbidden)
+					return
+				}
+			} else if val, ok := worker.ProcessingRequests().Load(id); ok {
+				origRes := val.(*worker.ReportResult)
+				if origRes.Owner != username { // Ajoute Owner dans ReportResult si ce n'est pas déjà fait
 					w.WriteHeader(http.StatusForbidden)
 					return
 				}

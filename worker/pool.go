@@ -71,7 +71,10 @@ func reportWorker(druidCfg *config.DruidConfig, reportLogger *logging.Logger, cf
 			continue
 		}
 		req := v.(*ReportRequest)
-		processingRequests.Store(nextID, &ReportResult{Status: StatusProcessing})
+		processingRequests.Store(nextID, &ReportResult{
+			Status: StatusProcessing,
+			Owner:  req.Owner, // <-- Ajout ici
+		})
 
 		reportLogger.Write("[START] id=" + nextID + " owner=" + req.Owner)
 
@@ -82,6 +85,7 @@ func reportWorker(druidCfg *config.DruidConfig, reportLogger *logging.Logger, cf
 			CSVPath:  csvPath,
 			XLSPath:  xlsPath,
 			ErrorMsg: errMsg,
+			Owner:    req.Owner, // <-- Ajout ici aussi
 		})
 	}
 }
