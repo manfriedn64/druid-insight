@@ -12,7 +12,7 @@ import (
 
 func ReportStatusHandler(cfg *auth.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, _, err := auth.ExtractUserAndAdminFromJWT(r, cfg.JWT.Secret)
+		username, _, err := auth.ExtractUserAndAdminFromJWT(r, cfg.JWT.Secret)
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -32,6 +32,18 @@ func ReportStatusHandler(cfg *auth.Config) http.HandlerFunc {
 		}
 		if val, ok := worker.ProcessingRequests().Load(id); ok {
 			rr := val.(*worker.ReportResult)
+			// Vérifie que l'utilisateur est bien le propriétaire
+			origReqVal, ok := worker.PendingRequests().Load(id)
+			if !ok {
+				origReqVal, ok = worker.ProcessingRequests().Load(id)
+			}
+			if ok {
+				origReq := origReqVal.(*worker.ReportRequest)
+				if origReq.Owner != username {
+					w.WriteHeader(http.StatusForbidden)
+					return
+				}
+			}
 			out := map[string]interface{}{
 				"status": rr.Status,
 			}
